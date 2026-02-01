@@ -750,20 +750,17 @@
 
 <script>
 // ==============================================
-// CONFIGURATION - REPLACE WITH YOUR URL
+// SIMPLIFIED WORKING VERSION
 // ==============================================
 const CONFIG = {
   API_BASE_URL: 'https://script.google.com/macros/s/AKfycbxwMeFKiDmu5H1D62uMNMHXunFD6_rErktvDhKZXL4sKiJt6QyAcVtH5BcBzTRrZhsn/exec',
   COURIER_ID: null,
   CURRENT_ROUTE: null,
-  CURRENT_STOP: null,
-  CURRENT_EXCEPTION: null,
-  LAST_SCREEN: 'screen-home',
-  SYNC_QUEUE: []
+  CURRENT_STOP: null
 };
 
 // ==============================================
-// CORE API FUNCTIONS
+// SIMPLE API CALL
 // ==============================================
 async function apiCall(action, data = {}) {
   const params = new URLSearchParams();
@@ -776,78 +773,21 @@ async function apiCall(action, data = {}) {
   });
   
   const url = `${CONFIG.API_BASE_URL}?${params.toString()}`;
+  console.log('API Calling:', url);
   
   try {
     const response = await fetch(url, { method: 'POST' });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
     const result = await response.json();
+    console.log('API Result:', result);
     return result;
-    
   } catch (error) {
     console.error('API Error:', error);
-    
-    // Queue for offline sync
-    const queueId = queueForSync(action, data);
-    
-    return {
-      success: false,
-      queued: true,
-      queueId: queueId,
-      error: error.message
-    };
-  }
-}
-
-function queueForSync(action, data) {
-  const queueItem = {
-    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-    action: action,
-    data: data,
-    timestamp: new Date().toISOString(),
-    attempts: 0
-  };
-  
-  CONFIG.SYNC_QUEUE.push(queueItem);
-  saveToLocalStorage('sync_queue', CONFIG.SYNC_QUEUE);
-  updateSyncStatus();
-  
-  return queueItem.id;
-}
-
-async function processSyncQueue() {
-  if (CONFIG.SYNC_QUEUE.length === 0 || !navigator.onLine) return;
-  
-  const item = CONFIG.SYNC_QUEUE[0];
-  
-  try {
-    const result = await apiCall(item.action, item.data);
-    
-    if (result.success && !result.queued) {
-      CONFIG.SYNC_QUEUE.shift();
-      saveToLocalStorage('sync_queue', CONFIG.SYNC_QUEUE);
-      updateSyncStatus();
-      
-      if (CONFIG.SYNC_QUEUE.length > 0) {
-        setTimeout(processSyncQueue, 1000);
-      }
-    } else {
-      item.attempts++;
-      if (item.attempts >= 3) {
-        CONFIG.SYNC_QUEUE.shift();
-      }
-      saveToLocalStorage('sync_queue', CONFIG.SYNC_QUEUE);
-    }
-  } catch (error) {
-    console.error('Sync error:', error);
+    return { success: false, error: error.message };
   }
 }
 
 // ==============================================
-// AUTHENTICATION - FIXED
+// SIMPLE LOGIN
 // ==============================================
 async function performLogin() {
   const courierId = document.getElementById('courier-id-input').value.trim();
@@ -859,132 +799,96 @@ async function performLogin() {
   const loginBtn = document.getElementById('login-btn');
   const statusElement = document.getElementById('login-status');
   
-  // SAFETY CHECK: Make sure elements exist
-  if (!loginBtn) {
-    console.error('Login button not found');
-    return;
-  }
-  
   loginBtn.disabled = true;
   loginBtn.textContent = 'LOGGING IN...';
   
   if (statusElement) {
-    statusElement.textContent = 'Connecting to server...';
+    statusElement.textContent = 'Connecting...';
     statusElement.className = 'status-text loading';
   }
   
   try {
+    // Try to login
     const result = await apiCall('login', { courierId: courierId });
     
-    if (!result.success) {
+    if (result.success) {
+      CONFIG.COURIER_ID = courierId;
+      
+      if (statusElement) {
+        statusElement.textContent = 'Login successful!';
+        statusElement.className = 'status-text success';
+      }
+      
+      // Update UI
+      const homeCourierElement = document.getElementById('home-courier');
+      if (homeCourierElement) {
+        homeCourierElement.textContent = `ID: ${courierId}`;
+      }
+      
+      // Go to home screen
+      setTimeout(() => {
+        go('screen-home');
+        
+        // Load routes
+        loadTodayRoute();
+        
+      }, 1000);
+      
+    } else {
       throw new Error(result.message || 'Login failed');
     }
-    
-    // Login successful
-    CONFIG.COURIER_ID = courierId;
-    
-    // Save to localStorage
-    saveToLocalStorage('current_courier', {
-      id: courierId,
-      name: result.name || `Courier ${courierId}`,
-      loginTime: new Date().toISOString()
-    });
-    
-    if (statusElement) {
-      statusElement.textContent = 'Login successful';
-      statusElement.className = 'status-text success';
-    }
-    
-    // Delay before switching screens
-    setTimeout(() => {
-      go('screen-home');
-      updateClock();
-      startClockUpdate();
-      
-      // Update UI elements safely
-      setTimeout(() => {
-        const homeCourierElement = document.getElementById('home-courier');
-        const homeTitleElement = document.getElementById('home-title');
-        
-        if (homeCourierElement) {
-          homeCourierElement.textContent = `ID: ${courierId}`;
-        }
-        
-        if (homeTitleElement && result.name) {
-          homeTitleElement.textContent = `Welcome ${result.name}`;
-        }
-        
-        // Load routes after UI is ready
-        loadTodayRoute();
-      }, 100);
-      
-    }, 1000);
     
   } catch (error) {
     console.error('Login error:', error);
     
     if (statusElement) {
-      statusElement.textContent = `Login failed: ${error.message}`;
+      statusElement.textContent = `Error: ${error.message}`;
       statusElement.className = 'status-text error';
     }
     
   } finally {
-    if (loginBtn) {
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'LOGIN';
-    }
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'LOGIN';
   }
 }
 
 // ==============================================
-// ROUTE & STOP MANAGEMENT - FIXED
+// LOAD ROUTES
 // ==============================================
 async function loadTodayRoute() {
   if (!CONFIG.COURIER_ID) return;
   
-  const today = new Date().toISOString().split('T')[0];
+  // Format today's date as DD-MM-YYYY
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const year = today.getFullYear();
+  const todayFormatted = `${day}-${month}-${year}`;
+  
+  console.log('Loading route for date:', todayFormatted);
   
   try {
     const result = await apiCall('getRoutes', {
       courierId: CONFIG.COURIER_ID,
-      date: today
+      date: todayFormatted
     });
     
     if (result.success && result.routes && result.routes.length > 0) {
       CONFIG.CURRENT_ROUTE = result.routes[0].routeId;
       
-      // Update UI safely
-      setTimeout(() => {
-        const routeInfoElement = document.getElementById('route-info');
-        const deliveriesRouteElement = document.getElementById('deliveries-route');
-        
-        if (routeInfoElement) {
-          const route = result.routes[0];
-          routeInfoElement.textContent = `${route.completedStops || 0}/${route.totalStops || 0}`;
-        }
-        
-        if (deliveriesRouteElement) {
-          const route = result.routes[0];
-          deliveriesRouteElement.textContent = `Route: ${route.completedStops || 0}/${route.totalStops || 0}`;
-        }
-      }, 100);
-      
-      // Save route info
-      saveToLocalStorage('current_route', result.routes[0]);
-      
-    } else if (result.queued) {
-      // Load from localStorage
-      const savedRoute = loadFromLocalStorage('current_route');
-      if (savedRoute) {
-        CONFIG.CURRENT_ROUTE = savedRoute.routeId;
-        
-        setTimeout(() => {
-          const routeInfoElement = document.getElementById('route-info');
-          if (routeInfoElement) {
-            routeInfoElement.textContent = `${savedRoute.completedStops || 0}/${savedRoute.totalStops || 0}`;
-          }
-        }, 100);
+      // Update route info
+      const routeInfoElement = document.getElementById('route-info');
+      if (routeInfoElement) {
+        const route = result.routes[0];
+        routeInfoElement.textContent = `${route.completedStops || 0}/${route.totalStops || 0}`;
       }
+      
+      // Load stops for this route
+      loadStopsForRoute(CONFIG.CURRENT_ROUTE);
+      
+    } else {
+      console.log('No routes found:', result);
+      showToast('No route for today', 'warning');
     }
     
   } catch (error) {
@@ -992,35 +896,81 @@ async function loadTodayRoute() {
   }
 }
 
+// ==============================================
+// LOAD STOPS
+// ==============================================
+async function loadStopsForRoute(routeId) {
+  console.log('Loading stops for route:', routeId);
+  
+  try {
+    const result = await apiCall('getStops', { routeId: routeId });
+    
+    if (result.success && result.stops) {
+      console.log('Stops loaded:', result.stops.length);
+      
+      // Save stops to localStorage
+      localStorage.setItem('current_stops', JSON.stringify(result.stops));
+      
+      // Filter deliveries
+      const deliveries = result.stops.filter(stop => 
+        stop.type && stop.type.toUpperCase() === 'DELIVERY'
+      );
+      
+      // Update deliveries count
+      const deliveriesCount = document.getElementById('deliveries-count');
+      if (deliveriesCount) {
+        deliveriesCount.textContent = deliveries.length;
+      }
+      
+    } else {
+      console.log('No stops found:', result);
+    }
+    
+  } catch (error) {
+    console.error('Load stops error:', error);
+  }
+}
+
+// ==============================================
+// LOAD DELIVERIES LIST
+// ==============================================
 async function loadDeliveries() {
+  // First check if we have a route
   if (!CONFIG.CURRENT_ROUTE) {
-    showToast('No active route found', 'error');
-    return;
+    await loadTodayRoute();
   }
   
   go('screen-deliveries');
   
   try {
-    const result = await apiCall('getStops', {
-      routeId: CONFIG.CURRENT_ROUTE
-    });
+    // Try to load from localStorage first
+    const stopsJson = localStorage.getItem('current_stops');
+    let deliveries = [];
     
-    if (result.success && result.stops) {
-      const deliveries = result.stops.filter(stop => stop.type === 'DELIVERY');
-      displayDeliveriesList(deliveries);
-      saveToLocalStorage('current_deliveries', deliveries);
-    } else if (result.queued) {
-      const savedDeliveries = loadFromLocalStorage('current_deliveries') || [];
-      displayDeliveriesList(savedDeliveries);
-    } else {
-      const listElement = document.getElementById('deliveries-list');
-      if (listElement) {
-        listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No deliveries found</div></div>';
+    if (stopsJson) {
+      const allStops = JSON.parse(stopsJson);
+      deliveries = allStops.filter(stop => 
+        stop.type && stop.type.toUpperCase() === 'DELIVERY'
+      );
+    }
+    
+    // If no local data, try API
+    if (deliveries.length === 0 && CONFIG.CURRENT_ROUTE) {
+      const result = await apiCall('getStops', { routeId: CONFIG.CURRENT_ROUTE });
+      if (result.success && result.stops) {
+        deliveries = result.stops.filter(stop => 
+          stop.type && stop.type.toUpperCase() === 'DELIVERY'
+        );
+        localStorage.setItem('current_stops', JSON.stringify(result.stops));
       }
     }
     
+    // Display deliveries
+    displayDeliveriesList(deliveries);
+    
   } catch (error) {
     console.error('Load deliveries error:', error);
+    showToast('Failed to load deliveries', 'error');
   }
 }
 
@@ -1031,32 +981,44 @@ function displayDeliveriesList(deliveries) {
   if (!listElement) return;
   
   if (!deliveries || deliveries.length === 0) {
-    listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No deliveries scheduled</div></div>';
+    listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No deliveries</div></div>';
     if (countElement) countElement.textContent = '0';
     return;
   }
   
-  const listHtml = deliveries.map(stop => `
-    <div class="list-item" onclick="loadStopDetail('${stop.stopId}')">
-      <div class="list-item-title">${stop.name || 'Unknown'}</div>
-      <div class="list-item-sub">${stop.address || ''}, ${stop.city || ''}</div>
-      <div class="list-item-sub">
-        Parcels: ${stop.parcelCount || 1} | Status: <span class="${getStatusColor(stop.status)}">${stop.status || 'PENDING'}</span>
+  // Create HTML for each delivery
+  let html = '';
+  deliveries.forEach(stop => {
+    html += `
+      <div class="list-item" onclick="loadStopDetail('${stop.stopId}')">
+        <div class="list-item-title">${stop.name || 'Unknown'}</div>
+        <div class="list-item-sub">${stop.address || ''}, ${stop.city || ''}</div>
+        <div class="list-item-sub">Parcels: ${stop.parcelCount || 1}</div>
       </div>
-    </div>
-  `).join('');
+    `;
+  });
   
-  listElement.innerHTML = listHtml;
+  listElement.innerHTML = html;
   if (countElement) countElement.textContent = deliveries.length;
 }
 
+// ==============================================
+// LOAD STOP DETAIL
+// ==============================================
 async function loadStopDetail(stopId) {
   CONFIG.CURRENT_STOP = stopId;
   
   try {
-    const deliveries = loadFromLocalStorage('current_deliveries') || [];
-    let stop = deliveries.find(s => s.stopId === stopId);
+    // Get from localStorage first
+    const stopsJson = localStorage.getItem('current_stops');
+    let stop = null;
     
+    if (stopsJson) {
+      const allStops = JSON.parse(stopsJson);
+      stop = allStops.find(s => s.stopId === stopId);
+    }
+    
+    // If not found, try API
     if (!stop) {
       const result = await apiCall('getStop', { stopId: stopId });
       if (result.success && result.stop) {
@@ -1073,37 +1035,41 @@ async function loadStopDetail(stopId) {
     
   } catch (error) {
     console.error('Load stop error:', error);
-    showToast('Failed to load stop details', 'error');
+    showToast('Failed to load stop', 'error');
   }
 }
 
 function updateStopDetailScreen(stop) {
-  // Update elements safely
-  const stopNameElement = document.getElementById('stop-name');
-  const stopNumberElement = document.getElementById('stop-number');
-  const stopStatusElement = document.getElementById('stop-status');
-  const stopDetailsElement = document.getElementById('stop-details');
-  const stopParcelsElement = document.getElementById('stop-parcels');
-  const currentStopScanElement = document.getElementById('current-stop-scan');
+  // Update all elements safely
+  const elements = {
+    'stop-name': stop.name || '--',
+    'stop-number': `Stop ${stop.stopNumber || ''}`,
+    'stop-status': stop.status || 'PENDING',
+    'stop-parcels': stop.parcelCount || '--',
+    'current-stop-scan': stop.name || '--'
+  };
   
-  if (stopNameElement) stopNameElement.textContent = stop.name || '--';
-  if (stopNumberElement) stopNumberElement.textContent = `Stop ${stop.stopNumber || ''}`;
-  if (stopStatusElement) {
-    stopStatusElement.textContent = stop.status || 'PENDING';
-    stopStatusElement.className = getStatusColor(stop.status);
-  }
-  if (stopParcelsElement) stopParcelsElement.textContent = stop.parcelCount || '--';
-  if (currentStopScanElement) currentStopScanElement.textContent = stop.name || '--';
+  Object.keys(elements).forEach(id => {
+    const element = document.getElementById(id);
+    if (element) {
+      if (id === 'stop-status') {
+        element.textContent = elements[id];
+        element.className = getStatusColor(elements[id]);
+      } else {
+        element.textContent = elements[id];
+      }
+    }
+  });
   
-  if (stopDetailsElement) {
-    const detailsHtml = `
+  // Update stop details
+  const stopDetails = document.getElementById('stop-details');
+  if (stopDetails) {
+    stopDetails.innerHTML = `
       <div><b>Address:</b> ${stop.address || ''}</div>
       <div>${stop.city || ''}, ${stop.zip || ''}</div>
       ${stop.phone ? `<div><b>Phone:</b> ${stop.phone}</div>` : ''}
       <div><b>Parcels:</b> ${stop.parcelCount || 1}</div>
-      ${stop.notes ? `<div><b>Notes:</b> ${stop.notes}</div>` : ''}
     `;
-    stopDetailsElement.innerHTML = detailsHtml;
   }
 }
 
@@ -1112,341 +1078,83 @@ function updateStopDetailScreen(stop) {
 // ==============================================
 function goToScan() {
   if (!CONFIG.CURRENT_STOP) {
-    showToast('Please select a stop first', 'error');
+    showToast('Select a stop first', 'error');
     go('screen-deliveries');
     return;
   }
   
-  const currentScreen = document.querySelector('.screen.active');
-  if (currentScreen && currentScreen.id) {
-    CONFIG.LAST_SCREEN = currentScreen.id;
+  // Remember current screen
+  const activeScreen = document.querySelector('.screen.active');
+  if (activeScreen && activeScreen.id) {
+    CONFIG.LAST_SCREEN = activeScreen.id;
   }
   
-  updateScanScreen();
   go('screen-scan');
 }
 
-function updateScanScreen() {
-  const today = new Date().toISOString().split('T')[0];
-  const scans = loadFromLocalStorage('scans') || [];
-  const todayScans = scans.filter(s => s.scanTime && s.scanTime.startsWith(today));
-  
-  const todayScansElement = document.getElementById('today-scans');
-  if (todayScansElement) {
-    todayScansElement.textContent = todayScans.length;
-  }
-}
-
 async function manualBarcodeEntry() {
-  const barcode = prompt('Enter package barcode:');
+  const barcode = prompt('Enter barcode:');
   if (barcode && barcode.trim()) {
-    await saveScan(barcode.trim(), 'MANUAL');
+    await saveScan(barcode.trim());
   }
 }
 
-async function saveScan(barcode, scanType = 'SCAN') {
+async function saveScan(barcode) {
   if (!CONFIG.CURRENT_STOP || !CONFIG.COURIER_ID) {
     showToast('No stop selected', 'error');
-    return;
-  }
-  
-  if (!barcode || barcode.trim().length < 3) {
-    showToast('Invalid barcode', 'error');
     return;
   }
   
   const scanData = {
     stopId: CONFIG.CURRENT_STOP,
     courierId: CONFIG.COURIER_ID,
-    barcode: barcode.trim(),
-    scanType: scanType,
-    scanTime: new Date().toISOString()
+    barcode: barcode,
+    scanType: 'SCAN'
   };
   
   try {
     const result = await apiCall('saveScan', scanData);
     
     if (result.success) {
-      const scans = loadFromLocalStorage('scans') || [];
-      scans.push(scanData);
-      saveToLocalStorage('scans', scans);
-      
-      updateScanScreen();
       showToast(`Scan saved: ${barcode}`, 'success');
       
-    } else if (result.queued) {
-      scanData.queued = true;
-      const scans = loadFromLocalStorage('scans') || [];
-      scans.push(scanData);
-      saveToLocalStorage('scans', scans);
+      // Update scan count
+      updateScanCount();
       
-      updateScanScreen();
-      showToast(`Scan queued: ${barcode}`, 'warning');
+    } else {
+      showToast(`Scan failed: ${result.message}`, 'error');
     }
     
   } catch (error) {
     console.error('Save scan error:', error);
+    showToast('Scan failed', 'error');
   }
 }
 
-async function clearLastScan() {
-  const scans = loadFromLocalStorage('scans') || [];
-  if (scans.length === 0) {
-    showToast('No scans to clear', 'error');
-    return;
-  }
-  
-  const lastScan = scans[scans.length - 1];
-  if (confirm(`Remove last scan: ${lastScan.barcode}?`)) {
-    scans.pop();
-    saveToLocalStorage('scans', scans);
-    updateScanScreen();
-  }
-}
-
-async function viewScanHistory() {
-  go('screen-scan-history');
-  
-  try {
-    const scans = loadFromLocalStorage('scans') || [];
-    const stops = loadFromLocalStorage('current_deliveries') || [];
-    const listElement = document.getElementById('scan-history-list');
-    const countElement = document.getElementById('history-count');
-    
-    if (!listElement) return;
-    
-    if (scans.length === 0) {
-      listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No scan history</div></div>';
-      if (countElement) countElement.textContent = '0';
-      return;
-    }
-    
-    const historyHtml = scans.slice().reverse().map(scan => {
-      const stop = stops.find(s => s.stopId === scan.stopId);
-      const time = scan.scanTime ? new Date(scan.scanTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-      
-      return `
-        <div class="list-item">
-          <div class="list-item-title">${scan.barcode}</div>
-          <div class="list-item-sub">${stop ? stop.name : 'Unknown Stop'}</div>
-          <div class="list-item-sub">${time} | ${scan.scanType || 'SCAN'}</div>
-        </div>
-      `;
-    }).join('');
-    
-    listElement.innerHTML = historyHtml;
-    if (countElement) countElement.textContent = scans.length;
-    
-  } catch (error) {
-    console.error('Load scan history error:', error);
+function updateScanCount() {
+  const todayScans = document.getElementById('today-scans');
+  if (todayScans) {
+    const current = parseInt(todayScans.textContent) || 0;
+    todayScans.textContent = current + 1;
   }
 }
 
 // ==============================================
-// DELIVERY & EXCEPTION FUNCTIONS
-// ==============================================
-async function markAsDelivered() {
-  if (!CONFIG.CURRENT_STOP) return;
-  
-  if (confirm('Mark this stop as DELIVERED?')) {
-    try {
-      const result = await apiCall('updateStop', {
-        stopId: CONFIG.CURRENT_STOP,
-        status: 'DELIVERED',
-        updateTime: new Date().toISOString()
-      });
-      
-      if (result.success) {
-        const deliveries = loadFromLocalStorage('current_deliveries') || [];
-        const stopIndex = deliveries.findIndex(s => s.stopId === CONFIG.CURRENT_STOP);
-        if (stopIndex !== -1) {
-          deliveries[stopIndex].status = 'DELIVERED';
-          saveToLocalStorage('current_deliveries', deliveries);
-        }
-        
-        showToast('Stop marked as delivered', 'success');
-        go('screen-deliveries');
-        await loadTodayRoute();
-      }
-      
-    } catch (error) {
-      console.error('Mark delivered error:', error);
-    }
-  }
-}
-
-async function loadExceptions() {
-  go('screen-exceptions');
-  
-  const exceptions = [
-    { id: 'NOT_HOME', name: 'Customer Not Home' },
-    { id: 'REFUSED', name: 'Package Refused' },
-    { id: 'WRONG_ADDRESS', name: 'Wrong Address' },
-    { id: 'BUSINESS_CLOSED', name: 'Business Closed' },
-    { id: 'DAMAGED', name: 'Package Damaged' },
-    { id: 'INACCESSIBLE', name: 'Location Inaccessible' },
-    { id: 'WEATHER', name: 'Weather Delay' },
-    { id: 'OTHER', name: 'Other Issue' }
-  ];
-  
-  const listElement = document.getElementById('exceptions-list');
-  if (listElement) {
-    const listHtml = exceptions.map(ex => `
-      <div class="list-item" onclick="openExceptionDetail('${ex.id}', '${ex.name}')">
-        <div class="list-item-title">${ex.name}</div>
-      </div>
-    `).join('');
-    
-    listElement.innerHTML = listHtml;
-  }
-}
-
-function openExceptionDetail(exceptionId, exceptionName) {
-  CONFIG.CURRENT_EXCEPTION = exceptionId;
-  
-  const titleElement = document.getElementById('exception-title');
-  if (titleElement) {
-    titleElement.textContent = exceptionName;
-  }
-  
-  const notesElement = document.getElementById('exception-notes');
-  const actionElement = document.getElementById('exception-action');
-  const contactElement = document.getElementById('exception-contact');
-  
-  if (notesElement) notesElement.value = '';
-  if (actionElement) actionElement.value = '';
-  if (contactElement) contactElement.value = 'NONE';
-  
-  go('screen-exception-detail');
-}
-
-async function saveException() {
-  if (!CONFIG.CURRENT_STOP || !CONFIG.CURRENT_EXCEPTION) {
-    showToast('Please select stop and exception type', 'error');
-    return;
-  }
-  
-  const notesElement = document.getElementById('exception-notes');
-  const actionElement = document.getElementById('exception-action');
-  const contactElement = document.getElementById('exception-contact');
-  
-  if (!notesElement || !actionElement || !contactElement) {
-    showToast('Form elements not found', 'error');
-    return;
-  }
-  
-  const notes = notesElement.value.trim();
-  if (!notes) {
-    showToast('Please enter exception notes', 'error');
-    return;
-  }
-  
-  const action = actionElement.value;
-  const contact = contactElement.value;
-  
-  const exceptionData = {
-    stopId: CONFIG.CURRENT_STOP,
-    courierId: CONFIG.COURIER_ID,
-    exceptionType: CONFIG.CURRENT_EXCEPTION,
-    notes: notes,
-    actionTaken: action,
-    customerContacted: contact,
-    exceptionTime: new Date().toISOString()
-  };
-  
-  try {
-    const result = await apiCall('saveException', exceptionData);
-    
-    if (result.success) {
-      const deliveries = loadFromLocalStorage('current_deliveries') || [];
-      const stopIndex = deliveries.findIndex(s => s.stopId === CONFIG.CURRENT_STOP);
-      if (stopIndex !== -1) {
-        deliveries[stopIndex].status = 'EXCEPTION';
-        saveToLocalStorage('current_deliveries', deliveries);
-      }
-      
-      const exceptions = loadFromLocalStorage('exceptions') || [];
-      exceptions.push(exceptionData);
-      saveToLocalStorage('exceptions', exceptions);
-      
-      showToast('Exception saved', 'success');
-      go('screen-stop');
-    }
-    
-  } catch (error) {
-    console.error('Save exception error:', error);
-  }
-}
-
-// ==============================================
-// PICKUP FUNCTIONS
-// ==============================================
-async function loadPickups() {
-  if (!CONFIG.CURRENT_ROUTE) {
-    showToast('No active route found', 'error');
-    return;
-  }
-  
-  go('screen-pickups');
-  
-  try {
-    const result = await apiCall('getStops', {
-      routeId: CONFIG.CURRENT_ROUTE
-    });
-    
-    if (result.success && result.stops) {
-      const pickups = result.stops.filter(stop => stop.type === 'PICKUP');
-      displayPickupsList(pickups);
-      saveToLocalStorage('current_pickups', pickups);
-    }
-    
-  } catch (error) {
-    console.error('Load pickups error:', error);
-  }
-}
-
-function displayPickupsList(pickups) {
-  const listElement = document.getElementById('pickups-list');
-  const countElement = document.getElementById('pickups-count');
-  
-  if (!listElement) return;
-  
-  if (!pickups || pickups.length === 0) {
-    listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No pickups scheduled</div></div>';
-    if (countElement) countElement.textContent = '0';
-    return;
-  }
-  
-  const listHtml = pickups.map(stop => `
-    <div class="list-item" onclick="loadStopDetail('${stop.stopId}')">
-      <div class="list-item-title">${stop.name}</div>
-      <div class="list-item-sub">${stop.address}, ${stop.city}</div>
-      <div class="list-item-sub">Expected: ${stop.parcelCount || '?'} parcels</div>
-    </div>
-  `).join('');
-  
-  listElement.innerHTML = listHtml;
-  if (countElement) countElement.textContent = pickups.length;
-}
-
-// ==============================================
-// UI UTILITY FUNCTIONS - FIXED
+// SIMPLE UI FUNCTIONS
 // ==============================================
 function go(screenId) {
-  const screens = document.querySelectorAll('.screen');
-  screens.forEach(screen => {
+  // Hide all screens
+  document.querySelectorAll('.screen').forEach(screen => {
     screen.classList.remove('active');
   });
   
+  // Show requested screen
   const screen = document.getElementById(screenId);
   if (screen) {
     screen.classList.add('active');
     
-    if (screenId === 'screen-exceptions') {
-      loadExceptions();
-    } else if (screenId === 'screen-scan-history') {
-      viewScanHistory();
-    }
+    // Update clock on screen change
+    updateClock();
   }
 }
 
@@ -1459,15 +1167,9 @@ function updateClock() {
   const timeStr = now.toTimeString().substr(0, 5);
   const onlineStatus = navigator.onLine ? 'ON' : 'OFF';
   
-  const timeElements = document.querySelectorAll('[id$="-time"]');
-  timeElements.forEach(el => {
+  document.querySelectorAll('[id$="-time"]').forEach(el => {
     if (el) el.textContent = `${timeStr} | ${onlineStatus} | --%`;
   });
-}
-
-function startClockUpdate() {
-  updateClock();
-  setInterval(updateClock, 60000);
 }
 
 function updateNetworkStatus() {
@@ -1479,24 +1181,11 @@ function updateNetworkStatus() {
   if (navigator.onLine) {
     statusElement.textContent = 'Online';
     statusElement.className = 'success';
-    syncDot.style.background = CONFIG.SYNC_QUEUE.length > 0 ? '#FF9900' : '#00CC33';
+    syncDot.style.background = '#00CC33';
   } else {
     statusElement.textContent = 'Offline';
     statusElement.className = 'error';
     syncDot.style.background = '#CC0000';
-  }
-}
-
-function updateSyncStatus() {
-  const syncDot = document.getElementById('sync-dot');
-  if (!syncDot) return;
-  
-  if (CONFIG.SYNC_QUEUE.length > 0) {
-    syncDot.style.background = '#FF9900';
-  } else if (!navigator.onLine) {
-    syncDot.style.background = '#CC0000';
-  } else {
-    syncDot.style.background = '#00CC33';
   }
 }
 
@@ -1509,66 +1198,8 @@ function showStatus(message, type) {
 }
 
 function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.textContent = message;
-  toast.className = `toast toast-${type}`;
-  toast.style.cssText = `
-    position: fixed;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 11px;
-    z-index: 1000;
-    opacity: 0;
-    transition: opacity 0.3s;
-  `;
-  
-  if (type === 'success') {
-    toast.style.background = '#00CC33';
-    toast.style.color = 'white';
-  } else if (type === 'error') {
-    toast.style.background = '#CC0000';
-    toast.style.color = 'white';
-  } else if (type === 'warning') {
-    toast.style.background = '#FF9900';
-    toast.style.color = 'white';
-  } else {
-    toast.style.background = '#F7C600';
-    toast.style.color = 'black';
-  }
-  
-  document.body.appendChild(toast);
-  
-  setTimeout(() => toast.style.opacity = '1', 10);
-  
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => {
-      if (toast.parentNode) {
-        document.body.removeChild(toast);
-      }
-    }, 300);
-  }, 3000);
-}
-
-function saveToLocalStorage(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    console.error('LocalStorage save error:', e);
-  }
-}
-
-function loadFromLocalStorage(key) {
-  try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
-  } catch (e) {
-    console.error('LocalStorage load error:', e);
-    return null;
-  }
+  // Create simple alert for now
+  alert(`${type.toUpperCase()}: ${message}`);
 }
 
 function getStatusColor(status) {
@@ -1584,39 +1215,25 @@ function getStatusColor(status) {
 }
 
 // ==============================================
-// INITIALIZATION - FIXED
+// INITIALIZATION
 // ==============================================
 document.addEventListener('DOMContentLoaded', function() {
-  // Load queued items
-  CONFIG.SYNC_QUEUE = loadFromLocalStorage('sync_queue') || [];
-  
-  // Set up event listeners
-  window.addEventListener('online', function() {
-    updateNetworkStatus();
-    processSyncQueue();
-  });
-  
+  // Set up network status
+  updateNetworkStatus();
+  window.addEventListener('online', updateNetworkStatus);
   window.addEventListener('offline', updateNetworkStatus);
   
-  // Initialize
-  updateNetworkStatus();
-  updateSyncStatus();
-  
-  // Auto-sync every 30 seconds
-  setInterval(processSyncQueue, 30000);
+  // Start clock
+  updateClock();
+  setInterval(updateClock, 60000);
   
   // Focus login input
   const loginInput = document.getElementById('courier-id-input');
   if (loginInput) {
     loginInput.focus();
-  }
-  
-  // Check for saved courier ID
-  const savedCourier = loadFromLocalStorage('current_courier');
-  if (savedCourier && savedCourier.id) {
-    if (loginInput) {
-      loginInput.value = savedCourier.id;
-    }
+    
+    // Pre-fill with test ID
+    loginInput.value = '48219';
   }
 });
 
