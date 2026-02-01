@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Courier Handheld UI</title>
+  <meta name="viewport" content="width=240, height=320, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <style>
+    /* BASE LAYOUT: 240x320 QVGA, WM6.5 SAFE CSS */
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 240px;
+      height: 320px;
+      background: #000;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      color: #FFFFFF;
+      overflow: hidden;
+    }
+
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 240px;
+      height: 320px;
+      background: #101010;
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    /* HEADER (48px) */
+
+    .header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 240px;
+      height: 48px;
+      background: #F7C600; /* DHL-like yellow */
+      color: #000000;
+      font-weight: bold;
+    }
+
+    .header-top-row {
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      right: 4px;
+      height: 16px;
+      font-size: 10px;
+    }
+
+    .header-top-left {
+      float: left;
+    }
+
+    .header-top-right {
+      float: right;
+    }
+
+    .header-title {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      right: 4px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    /* FOOTER (42px) */
+
+    .footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 240px;
+      height: 42px;
+      background: #303030;
+      color: #FFFFFF;
+      font-size: 10px;
+    }
+
+    .footer-left {
+      position: absolute;
+      left: 6px;
+      top: 14px;
+    }
+
+    .footer-right {
+      position: absolute;
+      right: 6px;
+      top: 14px;
+      text-align: right;
+    }
+
+    .sync-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #00CC33;
+      border-radius: 4px;
+      margin-left: 4px;
+    }
+
+    .sync-dot.offline {
+      background: #CC0000;
+    }
+
+    .sync-dot.syncing {
+      background: #FFCC00;
+    }
+
+    /* CONTENT AREA (48px header + 42px footer = 230px remaining) */
+
+    .content {
+      position: absolute;
+      top: 48px;
+      left: 0;
+      width: 240px;
+      height: 230px;
+      background: #101010;
+      overflow: hidden;
+    }
+
+    /* MAIN MENU GRID (2x3) */
+
+    .menu-grid {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: 224px;
+      height: 214px;
+    }
+
+    .menu-button {
+      position: absolute;
+      width: 104px;
+      height: 100px;
+      background: #1A1A1A;
+      border-radius: 6px;
+      border: 1px solid #444444;
+      text-align: center;
+      color: #FFFFFF;
+    }
+
+    .menu-button-title {
+      position: absolute;
+      bottom: 10px;
+      left: 4px;
+      right: 4px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    .menu-button-icon {
+      position: absolute;
+      top: 18px;
+      left: 0;
+      right: 0;
+      font-size: 26px;
+    }
+
+    /* GRID POSITIONS */
+
+    .btn-scan      { top: 0;   left: 0; }
+    .btn-deliver   { top: 0;   left: 116px; }
+    .btn-pickup    { top: 108; left: 0; }
+    .btn-msg       { top: 108; left: 116px; }
+    .btn-exc       { top: 216; left: 0; }     /* not visible in 230px height, so we move grid up */
+    .btn-end       { top: 216; left: 116px; }
+
+    /* Adjust grid to fit 230px height: compress vertical spacing */
+    .menu-button { height: 96px; }
+    .btn-scan    { top: 0; }
+    .btn-deliver { top: 0; }
+    .btn-pickup  { top: 104px; }
+    .btn-msg     { top: 104px; }
+    /* For small screen, move EXCEPTIONS + END ROUTE to secondary row or another screen if needed */
+    .btn-exc, .btn-end { display: none; }
+
+    /* SIMPLE BUTTON STYLE */
+
+    .btn {
+      background: #2A2A2A;
+      border: 1px solid #555555;
+      border-radius: 4px;
+      color: #FFFFFF;
+      padding: 4px 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #F7C600;
+      color: #000000;
+      border-color: #C9A200;
+      font-weight: bold;
+    }
+
+    .btn-danger {
+      background: #AA0000;
+      border-color: #770000;
+    }
+
+    .btn-block {
+      display: block;
+      width: 100%;
+      text-align: center;
+      box-sizing: border-box;
+    }
+
+    .btn-row {
+      margin-top: 6px;
+    }
+
+    /* LISTS */
+
+    .list {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      overflow-y: auto;
+      border: 1px solid #333333;
+      background: #181818;
+    }
+
+    .list-item {
+      padding: 4px;
+      border-bottom: 1px solid #333333;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .list-item-title {
+      font-weight: bold;
+      font-size: 12px;
+    }
+
+    .list-item-sub {
+      font-size: 10px;
+      color: #CCCCCC;
+    }
+
+    /* SCAN SCREEN */
+
+    .scan-view {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      bottom: 40px;
+      border: 1px solid #444444;
+      background: #000000;
+      text-align: center;
+      font-size: 11px;
+      color: #888888;
+    }
+
+    .scan-crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 120px;
+      height: 60px;
+      margin-left: -60px;
+      margin-top: -30px;
+      border: 1px dashed #555555;
+    }
+
+    .scan-label {
+      position: absolute;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      text-align: center;
+    }
+
+    .scan-buttons {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      height: 32px;
+      text-align: center;
+    }
+
+    .scan-buttons .btn {
+      margin: 0 2px;
+    }
+
+    /* DELIVERY STOP SCREEN */
+
+    .stop-header {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      height: 52px;
+      border: 1px solid #333333;
+      background: #181818;
+      padding: 4px;
+      box-sizing: border-box;
+      font-size: 11px;
+    }
+
+    .stop-body {
+      position: absolute;
+      top: 60px;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+    }
+
+    .stop-buttons .btn {
+      margin-bottom: 4px;
+    }
+
+    /* SIGNATURE SCREEN */
+
+    .signature-pad {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      bottom: 40px;
+      background: #FFFFFF;
+      border: 1px solid #444444;
+    }
+
+    .signature-buttons {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      text-align: center;
+    }
+
+    /* PHOTO PROOF MOCK */
+
+    .photo-view {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      bottom: 40px;
+      border: 1px solid #444444;
+      background: #000000;
+      text-align: center;
+      color: #888888;
+      font-size: 11px;
+    }
+
+    .photo-button {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      margin-left: -20px;
+      border-radius: 20px;
+      border: 2px solid #FFFFFF;
+      cursor: pointer;
+    }
+
+    .photo-buttons {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      height: 32px;
+      text-align: center;
+    }
+
+    /* EXCEPTIONS */
+
+    .exception-detail {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      bottom: 40px;
+      border: 1px solid #333333;
+      background: #181818;
+      padding: 4px;
+      box-sizing: border-box;
+      font-size: 11px;
+      overflow-y: auto;
+    }
+
+    .field-label {
+      font-size: 10px;
+      color: #CCCCCC;
+      margin-top: 4px;
+    }
+
+    .field-input {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 11px;
+      padding: 2px;
+      margin-top: 2px;
+      background: #000000;
+      color: #FFFFFF;
+      border: 1px solid #555555;
+    }
+
+    /* LOADING SPINNER */
+
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 30px;
+      height: 30px;
+      margin-left: -15px;
+      margin-top: -15px;
+      border: 3px solid #333;
+      border-top: 3px solid #F7C600;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* SIMPLE LINK BUTTONS */
+
+    .link {
+      color: #F7C600;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* STATUS INDICATORS */
+    .status-delivered { color: #00CC33; }
+    .status-pending { color: #FFCC00; }
+    .status-exception { color: #FF3333; }
+    
+    /* ALERT STYLE */
+    .alert {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2A2A2A;
+      border: 2px solid #F7C600;
+      padding: 12px;
+      z-index: 1000;
+      max-width: 200px;
+      text-align: center;
+      border-radius: 6px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    
+    .alert button {
+      margin-top: 8px;
+      padding: 4px 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HOME SCREEN -->
+  <div id="screen-home" class="screen active">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="current-time">Loading...</div>
+        <div class="header-top-right">Courier ID: <span id="courier-id">48219</span></div>
+      </div>
+      <div class="header-title">Courier Menu</div>
+    </div>
+    <div class="content">
+      <div class="menu-grid">
+        <div class="menu-button btn-scan" onclick="go('screen-scan')">
+          <div class="menu-button-icon">▦</div>
+          <div class="menu-button-title">SCAN</div>
+        </div>
+        <div class="menu-button btn-deliver" onclick="loadDeliveries()">
+          <div class="menu-button-icon">◎</div>
+          <div class="menu-button-title">DELIVERIES</div>
+        </div>
+        <div class="menu-button btn-pickup" onclick="loadPickups()">
+          <div class="menu-button-icon">⬆</div>
+          <div class="menu-button-title">PICKUPS</div>
+        </div>
+        <div class="menu-button btn-msg" onclick="loadMessages()">
+          <div class="menu-button-icon">✉</div>
+          <div class="menu-button-title">MESSAGES</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left">Device: CS400</div>
+      <div class="footer-right">
+        <span id="sync-status">Loading...</span>
+        <span class="sync-dot" id="sync-dot"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELIVERIES LIST -->
+  <div id="screen-deliveries" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="deliveries-time">Loading...</div>
+        <div class="header-top-right">Route: <span id="route-progress">0 / 0</span></div>
+      </div>
+      <div class="header-title">Deliveries</div>
+    </div>
+    <div class="content">
+      <div class="list" id="deliveries-list">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-home')">◀ Menu</span></div>
+      <div class="footer-right">Stops: <span id="delivery-count">0</span></div>
+    </div>
+  </div>
+
+  <!-- DELIVERY STOP DETAIL -->
+  <div id="screen-stop" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="stop-time">Loading...</div>
+        <div class="header-top-right">Stop <span id="stop-number">0</span> / <span id="total-stops">0</span></div>
+      </div>
+      <div class="header-title" id="stop-name">Loading...</div>
+    </div>
+    <div class="content">
+      <div class="stop-header" id="stop-details">
+        <div><b>Address:</b> <span id="stop-address">Loading...</span></div>
+        <div><span id="stop-city">Loading...</span></div>
+        <div><b>Parcels:</b> <span id="stop-parcels">0</span></div>
+        <div><b>Status:</b> <span id="stop-status">Pending</span></div>
+      </div>
+      <div class="stop-body">
+        <div class="stop-buttons" id="stop-buttons">
+          <div class="btn-row">
+            <button class="btn btn-primary btn-block" onclick="go('screen-scan')">Scan Package</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-block" onclick="go('screen-signature')">Capture Signature</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-block" onclick="go('screen-photo')">Photo Proof</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-block" onclick="go('screen-exceptions')">Mark Exception</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-block btn-danger" onclick="markDelivered()">Mark as Delivered</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-deliveries')">◀ Stops</span></div>
+      <div class="footer-right">ID: <span id="stop-id">...</span></div>
+    </div>
+  </div>
+
+  <!-- SCAN SCREEN -->
+  <div id="screen-scan" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="scan-time">Loading...</div>
+        <div class="header-top-right">Scanner</div>
+      </div>
+      <div class="header-title">Scan Package</div>
+    </div>
+    <div class="content">
+      <div class="scan-view">
+        <div class="scan-crosshair"></div>
+        <div class="scan-label">Align barcode within box</div>
+      </div>
+      <div class="scan-buttons">
+        <button class="btn" onclick="manualScanEntry()">Manual</button>
+        <button class="btn" onclick="toggleFlashlight()">Light</button>
+        <button class="btn" onclick="submitScan()">Submit</button>
+      </div>
+      <div style="position: absolute; bottom: 60px; left: 0; right: 0; text-align: center; font-size: 10px; color: #888;">
+        <div id="scan-result"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="goBackFromScan()">◀ Back</span></div>
+      <div class="footer-right">Ready</div>
+    </div>
+  </div>
+
+  <!-- SIGNATURE SCREEN -->
+  <div id="screen-signature" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="signature-time">Loading...</div>
+        <div class="header-top-right">POD</div>
+      </div>
+      <div class="header-title">Signature</div>
+    </div>
+    <div class="content">
+      <div class="signature-pad" id="signature-pad">
+        <canvas id="signature-canvas" width="230" height="180" style="width: 100%; height: 100%; cursor: crosshair;"></canvas>
+      </div>
+      <div class="signature-buttons">
+        <button class="btn" onclick="clearSignature()">Clear</button>
+        <button class="btn btn-primary" onclick="saveSignature()">Confirm</button>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-stop')">◀ Stop</span></div>
+      <div class="footer-right">POD</div>
+    </div>
+  </div>
+
+  <!-- PHOTO PROOF SCREEN -->
+  <div id="screen-photo" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="photo-time">Loading...</div>
+        <div class="header-top-right">Camera</div>
+      </div>
+      <div class="header-title">Photo Proof</div>
+    </div>
+    <div class="content">
+      <div class="photo-view">
+        <div style="position:absolute;top:40%;left:0;right:0;">Camera preview mock</div>
+        <video id="camera-preview" style="width: 100%; height: 100%; display: none;"></video>
+        <canvas id="photo-canvas" style="width: 100%; height: 100%; display: none;"></canvas>
+        <div class="photo-button" onclick="takePhoto()"></div>
+      </div>
+      <div class="photo-buttons">
+        <button class="btn btn-primary" onclick="uploadPhoto()">Upload</button>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-stop')">◀ Stop</span></div>
+      <div class="footer-right">Photo</div>
+    </div>
+  </div>
+
+  <!-- EXCEPTIONS LIST -->
+  <div id="screen-exceptions" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="exceptions-time">Loading...</div>
+        <div class="header-top-right">Exceptions</div>
+      </div>
+      <div class="header-title">Select Exception</div>
+    </div>
+    <div class="content">
+      <div class="list" id="exceptions-list">
+        <!-- Exceptions will be loaded here -->
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-stop')">◀ Stop</span></div>
+      <div class="footer-right">Select</div>
+    </div>
+  </div>
+
+  <!-- EXCEPTION DETAIL -->
+  <div id="screen-exception-detail" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="exception-detail-time">Loading...</div>
+        <div class="header-top-right">Exception</div>
+      </div>
+      <div class="header-title" id="exception-title">Exception</div>
+    </div>
+    <div class="content">
+      <div class="exception-detail">
+        <div class="field-label">Exception Type</div>
+        <input type="text" class="field-input" id="exception-type" readonly>
+        
+        <div class="field-label">Notes</div>
+        <textarea class="field-input" id="exception-notes" rows="3" placeholder="Add details about the exception..."></textarea>
+
+        <div class="field-label">Leave at location?</div>
+        <select class="field-input" id="exception-location">
+          <option value="no">No</option>
+          <option value="front_door">Front Door</option>
+          <option value="back_door">Back Door</option>
+          <option value="neighbor">Neighbor</option>
+          <option value="secure_location">Secure Location</option>
+        </select>
+
+        <div class="field-label">Notify customer?</div>
+        <select class="field-input" id="exception-notify">
+          <option value="none">None</option>
+          <option value="sms">SMS</option>
+          <option value="email">Email</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+      <div class="signature-buttons">
+        <button class="btn" onclick="go('screen-exceptions')">Back</button>
+        <button class="btn btn-primary" onclick="saveException()">Save</button>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-exceptions')">◀ List</span></div>
+      <div class="footer-right">Exception</div>
+    </div>
+  </div>
+
+  <!-- PICKUPS -->
+  <div id="screen-pickups" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="pickups-time">Loading...</div>
+        <div class="header-top-right">Pickups</div>
+      </div>
+      <div class="header-title">Pickups</div>
+    </div>
+    <div class="content">
+      <div class="list" id="pickups-list">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-home')">◀ Menu</span></div>
+      <div class="footer-right"><span id="pickup-count">0</span> Pickups</div>
+    </div>
+  </div>
+
+  <!-- MESSAGES -->
+  <div id="screen-messages" class="screen">
+    <div class="header">
+      <div class="header-top-row">
+        <div class="header-top-left" id="messages-time">Loading...</div>
+        <div class="header-top-right">Messages</div>
+      </div>
+      <div class="header-title">Messages</div>
+    </div>
+    <div class="content">
+      <div class="list" id="messages-list">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left"><span class="link" onclick="go('screen-home')">◀ Menu</span></div>
+      <div class="footer-right"><span id="message-count">0</span> Unread</div>
+    </div>
+  </div>
+
+  <!-- HIDDEN DATA STORAGE -->
+  <div id="data-storage" style="display: none;">
+    <input type="hidden" id="current-stop-id">
+    <input type="hidden" id="current-scan-data">
+    <input type="hidden" id="current-signature-data">
+    <input type="hidden" id="current-photo-data">
+  </div>
+
+  <script>
+    // Configuration - UPDATED WITH YOUR APPSCRIPT URL
+    const CONFIG = {
+      COURIER_ID: '48219',
+      SHEET_ID: '1jO-wWgKMQqIiKBateHXcb04DGu68YVhjBIfM49cDRCs',
+      API_BASE_URL: 'https://script.google.com/macros/s/AKfycbzy7veCW1Ug5QENnUaUgGH9QYybtvGhxKXzbPEG7h3kqUGcS6JFEc8N_ZwqCgphH-WWWg/exec',
+      APP_VERSION: '1.0.0',
+      OFFLINE_MODE: false
+    };
+
+    // Global state
+    let currentState = {
+      deliveries: [],
+      pickups: [],
+      messages: [],
+      currentStop: null,
+      scanHistory: [],
+      syncStatus: 'online',
+      lastSync: null
+    };
+
+    // Navigation
+    let lastScreenBeforeScan = 'screen-home';
+    let navigationStack = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      updateTime();
+      setInterval(updateTime, 1000);
+      
+      // Initialize signature canvas
+      initSignatureCanvas();
+      
+      // Load initial data
+      loadInitialData();
+      
+      // Start sync interval
+      setInterval(checkSyncStatus, 30000);
+      
+      // Simulate camera (in real app, this would use actual camera API)
+      setupCameraMock();
+      
+      // Initialize exceptions list
+      initExceptionsList();
+      
+      // Test API connection
+      testAPI();
+    });
+
+    // Time updater
+    function updateTime() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      document.querySelectorAll('[id$="-time"]').forEach(el => {
+        el.textContent = timeStr;
+      });
+    }
+
+    // Navigation functions
+    function go(screenId) {
+      const currentScreen = document.querySelector('.screen.active');
+      if (currentScreen) {
+        navigationStack.push(currentScreen.id);
+      }
+      
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+      });
+      
+      const targetScreen = document.getElementById(screenId);
+      if (targetScreen) {
+        targetScreen.classList.add('active');
+        updateTime();
+        
+        // Update sync status
+        updateSyncStatus();
+      }
+    }
+
+    function goBack() {
+      if (navigationStack.length > 0) {
+        const prevScreen = navigationStack.pop();
+        go(prevScreen);
+      } else {
+        go('screen-home');
+      }
+    }
+
+    function goBackFromScan() {
+      if (lastScreenBeforeScan) {
+        go(lastScreenBeforeScan);
+      } else {
+        go('screen-home');
+      }
+    }
+
+    // Data loading functions
+    async function loadInitialData() {
+      try {
+        updateSyncStatus('syncing');
+        
+        // Load deliveries
+        await loadDeliveries();
+        
+        // Load pickups
+        await loadPickups();
+        
+        // Load messages
+        await loadMessages();
+        
+        updateSyncStatus('online');
+      } catch (error) {
+        console.error('Initial data load failed:', error);
+        updateSyncStatus('offline');
+      }
+    }
+
+    async function loadDeliveries() {
+      try {
+        showLoading('deliveries-list');
+        
+        const response = await fetchFromSheet('deliveries');
+        
+        if (response.status === 'success') {
+          currentState.deliveries = response.data || [];
+        } else {
+          currentState.deliveries = getMockData('deliveries').data;
+        }
+        
+        renderDeliveriesList();
+        go('screen-deliveries');
+      } catch (error) {
+        console.error('Failed to load deliveries:', error);
+        showError('deliveries-list', 'Failed to load deliveries');
+        currentState.deliveries = getMockData('deliveries').data;
+        renderDeliveriesList();
+      }
+    }
+
+    async function loadPickups() {
+      try {
+        showLoading('pickups-list');
+        
+        const response = await fetchFromSheet('pickups');
+        if (response.status === 'success') {
+          currentState.pickups = response.data || [];
+        } else {
+          currentState.pickups = getMockData('pickups').data;
+        }
+        
+        renderPickupsList();
+        go('screen-pickups');
+      } catch (error) {
+        console.error('Failed to load pickups:', error);
+        showError('pickups-list', 'Failed to load pickups');
+        currentState.pickups = getMockData('pickups').data;
+        renderPickupsList();
+      }
+    }
+
+    async function loadMessages() {
+      try {
+        showLoading('messages-list');
+        
+        const response = await fetchFromSheet('messages');
+        if (response.status === 'success') {
+          currentState.messages = response.data || [];
+        } else {
+          currentState.messages = getMockData('messages').data;
+        }
+        
+        renderMessagesList();
+        go('screen-messages');
+      } catch (error) {
+        console.error('Failed to load messages:', error);
+        showError('messages-list', 'Failed to load messages');
+        currentState.messages = getMockData('messages').data;
+        renderMessagesList();
+      }
+    }
+
+    // Render functions
+    function renderDeliveriesList() {
+      const container = document.getElementById('deliveries-list');
+      const deliveries = currentState.deliveries;
+      
+      if (!deliveries || deliveries.length === 0) {
+        container.innerHTML = '<div class="list-item">No deliveries scheduled</div>';
+        document.getElementById('delivery-count').textContent = '0';
+        document.getElementById('route-progress').textContent = '0 / 0';
+        return;
+      }
+      
+      let html = '';
+      deliveries.forEach((delivery, index) => {
+        const statusClass = delivery.status === 'delivered' ? 'status-delivered' : 
+                          delivery.status === 'exception' ? 'status-exception' : 'status-pending';
+        
+        html += `
+          <div class="list-item" onclick="openStop('${delivery.id}')">
+            <div class="list-item-title">Stop ${delivery.stop_number} - ${delivery.customer_name}</div>
+            <div class="list-item-sub">${delivery.address}</div>
+            <div class="list-item-sub ${statusClass}">Status: ${delivery.status}</div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+      document.getElementById('delivery-count').textContent = deliveries.length;
+      
+      // Calculate route progress
+      const deliveredCount = deliveries.filter(d => d.status === 'delivered').length;
+      document.getElementById('route-progress').textContent = `${deliveredCount} / ${deliveries.length}`;
+    }
+
+    function renderPickupsList() {
+      const container = document.getElementById('pickups-list');
+      const pickups = currentState.pickups;
+      
+      if (!pickups || pickups.length === 0) {
+        container.innerHTML = '<div class="list-item">No pickups scheduled</div>';
+        document.getElementById('pickup-count').textContent = '0';
+        return;
+      }
+      
+      let html = '';
+      pickups.forEach(pickup => {
+        html += `
+          <div class="list-item">
+            <div class="list-item-title">${pickup.customer_name}</div>
+            <div class="list-item-sub">${pickup.address}</div>
+            <div class="list-item-sub">Packages: ${pickup.package_count}</div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+      document.getElementById('pickup-count').textContent = pickups.length;
+    }
+
+    function renderMessagesList() {
+      const container = document.getElementById('messages-list');
+      const messages = currentState.messages;
+      
+      if (!messages || messages.length === 0) {
+        container.innerHTML = '<div class="list-item">No messages</div>';
+        document.getElementById('message-count').textContent = '0';
+        return;
+      }
+      
+      let html = '';
+      messages.forEach(message => {
+        const unreadStyle = message.read ? '' : 'font-weight: bold;';
+        html += `
+          <div class="list-item" style="${unreadStyle}">
+            <div class="list-item-title">${message.sender}</div>
+            <div class="list-item-sub">${message.message}</div>
+            <div class="list-item-sub" style="font-size: 9px;">${message.timestamp}</div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+      const unreadCount = messages.filter(m => !m.read).length;
+      document.getElementById('message-count').textContent = unreadCount;
+    }
+
+    // Stop management
+    function openStop(stopId) {
+      const stop = currentState.deliveries.find(d => d.id === stopId);
+      if (!stop) {
+        alert('Stop not found');
+        return;
+      }
+      
+      currentState.currentStop = stop;
+      document.getElementById('current-stop-id').value = stopId;
+      
+      // Update UI
+      document.getElementById('stop-number').textContent = stop.stop_number;
+      document.getElementById('total-stops').textContent = currentState.deliveries.length;
+      document.getElementById('stop-name').textContent = stop.customer_name;
+      document.getElementById('stop-address').textContent = stop.address;
+      document.getElementById('stop-city').textContent = stop.city || '';
+      document.getElementById('stop-parcels').textContent = stop.package_count || 1;
+      document.getElementById('stop-status').textContent = stop.status || 'pending';
+      document.getElementById('stop-status').className = stop.status === 'delivered' ? 'status-delivered' : 
+                                                       stop.status === 'exception' ? 'status-exception' : 'status-pending';
+      document.getElementById('stop-id').textContent = stop.id;
+      
+      go('screen-stop');
+    }
+
+    async function markDelivered() {
+      if (!currentState.currentStop) return;
+      
+      try {
+        const stopId = currentState.currentStop.id;
+        const timestamp = new Date().toISOString();
+        
+        // Update local state
+        currentState.currentStop.status = 'delivered';
+        currentState.currentStop.delivered_at = timestamp;
+        
+        // Update UI
+        document.getElementById('stop-status').textContent = 'Delivered';
+        document.getElementById('stop-status').className = 'status-delivered';
+        
+        // Send to Google Sheets
+        const result = await updateDeliveryStatus(stopId, {
+          status: 'delivered',
+          delivered_at: timestamp,
+          courier_id: CONFIG.COURIER_ID
+        });
+        
+        if (result.status === 'success') {
+          customAlert('✓ Delivery marked as completed');
+        } else {
+          customAlert('⚠ Saved offline - will sync later');
+        }
+        
+        // Refresh deliveries list
+        await loadDeliveries();
+        
+      } catch (error) {
+        console.error('Failed to mark as delivered:', error);
+        customAlert('✗ Failed to update delivery status');
+      }
+    }
+
+    // Scan functions
+    function manualScanEntry() {
+      const trackingNumber = prompt('Enter tracking number:');
+      if (trackingNumber) {
+        processScan(trackingNumber);
+      }
+    }
+
+    function toggleFlashlight() {
+      // In real app, this would control device flashlight
+      customAlert('Flashlight toggled (mock)');
+    }
+
+    async function submitScan() {
+      // Simulate barcode scan
+      const mockBarcode = 'TRK' + Date.now().toString().slice(-8);
+      processScan(mockBarcode);
+    }
+
+    async function processScan(barcode) {
+      try {
+        document.getElementById('scan-result').textContent = `Scanned: ${barcode}`;
+        document.getElementById('scan-result').style.color = '#00CC33';
+        
+        // Save scan data
+        const scanData = {
+          barcode: barcode,
+          timestamp: new Date().toISOString(),
+          stop_id: document.getElementById('current-stop-id').value,
+          courier_id: CONFIG.COURIER_ID,
+          status: 'scanned',
+          scan_type: 'manual'
+        };
+        
+        // Send to Google Sheets
+        const result = await saveScanToSheet(scanData);
+        
+        if (result.status === 'success') {
+          document.getElementById('scan-result').textContent += ' ✓';
+        } else {
+          document.getElementById('scan-result').textContent += ' (offline)';
+          document.getElementById('scan-result').style.color = '#FFCC00';
+        }
+        
+        currentState.scanHistory.push(scanData);
+        
+        // Auto-return after 2 seconds
+        setTimeout(() => {
+          goBackFromScan();
+        }, 2000);
+        
+      } catch (error) {
+        console.error('Scan failed:', error);
+        document.getElementById('scan-result').textContent = 'Scan failed';
+        document.getElementById('scan-result').style.color = '#FF3333';
+      }
+    }
+
+    // Signature functions
+    let signatureCanvas, signatureCtx;
+    let isDrawing = false;
+
+    function initSignatureCanvas() {
+      signatureCanvas = document.getElementById('signature-canvas');
+      signatureCtx = signatureCanvas.getContext('2d');
+      signatureCtx.fillStyle = '#FFFFFF';
+      signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+      signatureCtx.strokeStyle = '#000000';
+      signatureCtx.lineWidth = 2;
+      signatureCtx.lineCap = 'round';
+      signatureCtx.lineJoin = 'round';
+      
+      signatureCanvas.addEventListener('mousedown', startDrawing);
+      signatureCanvas.addEventListener('mousemove', draw);
+      signatureCanvas.addEventListener('mouseup', stopDrawing);
+      signatureCanvas.addEventListener('mouseout', stopDrawing);
+      
+      // Touch events for mobile
+      signatureCanvas.addEventListener('touchstart', startDrawingTouch);
+      signatureCanvas.addEventListener('touchmove', drawTouch);
+      signatureCanvas.addEventListener('touchend', stopDrawing);
+    }
+
+    function startDrawing(e) {
+      isDrawing = true;
+      const rect = signatureCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      signatureCtx.beginPath();
+      signatureCtx.moveTo(x, y);
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const rect = signatureCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      signatureCtx.lineTo(x, y);
+      signatureCtx.stroke();
+    }
+
+    function startDrawingTouch(e) {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = signatureCanvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      isDrawing = true;
+      signatureCtx.beginPath();
+      signatureCtx.moveTo(x, y);
+    }
+
+    function drawTouch(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = signatureCanvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      signatureCtx.lineTo(x, y);
+      signatureCtx.stroke();
+    }
+
+    function stopDrawing() {
+      isDrawing = false;
+      signatureCtx.closePath();
+    }
+
+    function clearSignature() {
+      signatureCtx.fillStyle = '#FFFFFF';
+      signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+      signatureCtx.beginPath();
+    }
+
+    async function saveSignature() {
+      try {
+        const signatureData = signatureCanvas.toDataURL('image/png');
+        document.getElementById('current-signature-data').value = signatureData;
+        
+        const signatureRecord = {
+          stop_id: document.getElementById('current-stop-id').value,
+          signature_data: signatureData,
+          timestamp: new Date().toISOString(),
+          courier_id: CONFIG.COURIER_ID,
+          customer_name: currentState.currentStop?.customer_name || 'Unknown'
+        };
+        
+        const result = await saveSignatureToSheet(signatureRecord);
+        
+        if (result.status === 'success') {
+          customAlert('✓ Signature saved successfully');
+          go('screen-stop');
+        } else {
+          customAlert('⚠ Signature saved offline');
+          go('screen-stop');
+        }
+      } catch (error) {
+        console.error('Failed to save signature:', error);
+        customAlert('✗ Failed to save signature');
+      }
+    }
+
+    // Photo functions
+    let cameraStream;
+
+    async function setupCameraMock() {
+      // In real app, this would access device camera
+      console.log('Camera mock setup complete');
+    }
+
+    function takePhoto() {
+      // Mock photo capture
+      const canvas = document.getElementById('photo-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Create mock photo
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#000000';
+      ctx.font = '12px Arial';
+      ctx.fillText('Package at Door', 10, 50);
+      ctx.fillText(new Date().toLocaleString(), 10, 70);
+      ctx.fillText('Stop: ' + (currentState.currentStop?.customer_name || 'Unknown'), 10, 90);
+      
+      // Add a simple package image
+      ctx.fillStyle = '#F7C600';
+      ctx.fillRect(50, 100, 40, 30);
+      ctx.fillStyle = '#000000';
+      ctx.fillText('PKG', 60, 120);
+      
+      document.getElementById('current-photo-data').value = canvas.toDataURL('image/jpeg', 0.7);
+      customAlert('✓ Photo captured (mock)');
+    }
+
+    async function uploadPhoto() {
+      try {
+        const photoData = document.getElementById('current-photo-data').value;
+        if (!photoData) {
+          customAlert('✗ Please take a photo first');
+          return;
+        }
+        
+        const photoRecord = {
+          stop_id: document.getElementById('current-stop-id').value,
+          photo_data: photoData,
+          timestamp: new Date().toISOString(),
+          courier_id: CONFIG.COURIER_ID,
+          photo_type: 'delivery_proof'
+        };
+        
+        const result = await savePhotoToSheet(photoRecord);
+        
+        if (result.status === 'success') {
+          customAlert('✓ Photo uploaded successfully');
+          go('screen-stop');
+        } else {
+          customAlert('⚠ Photo saved offline');
+          go('screen-stop');
+        }
+      } catch (error) {
+        console.error('Failed to upload photo:', error);
+        customAlert('✗ Failed to upload photo');
+      }
+    }
+
+    // Exception functions
+    function initExceptionsList() {
+      const exceptions = [
+        'Customer Not Home',
+        'Wrong Address',
+        'Business Closed',
+        'Dangerous Dog',
+        'Weather Delay',
+        'Refused Delivery',
+        'Damaged Package',
+        'Insufficient Address'
+      ];
+      
+      const container = document.getElementById('exceptions-list');
+      let html = '';
+      exceptions.forEach(exception => {
+        html += `
+          <div class="list-item" onclick="openException('${exception}')">
+            <div class="list-item-title">${exception}</div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function openException(exceptionType) {
+      document.getElementById('exception-title').textContent = exceptionType;
+      document.getElementById('exception-type').value = exceptionType;
+      go('screen-exception-detail');
+    }
+
+    async function saveException() {
+      try {
+        const exceptionData = {
+          stop_id: document.getElementById('current-stop-id').value,
+          exception_type: document.getElementById('exception-type').value,
+          notes: document.getElementById('exception-notes').value,
+          leave_at_location: document.getElementById('exception-location').value,
+          notify_customer: document.getElementById('exception-notify').value,
+          timestamp: new Date().toISOString(),
+          courier_id: CONFIG.COURIER_ID,
+          status: 'pending'
+        };
+        
+        // Update local state
+        if (currentState.currentStop) {
+          currentState.currentStop.status = 'exception';
+        }
+        
+        // Send to Google Sheets
+        const exceptionResult = await saveExceptionToSheet(exceptionData);
+        
+        // Also update delivery status
+        const updateResult = await updateDeliveryStatus(exceptionData.stop_id, {
+          status: 'exception',
+          exception_type: exceptionData.exception_type,
+          exception_notes: exceptionData.notes
+        });
+        
+        if (exceptionResult.status === 'success' && updateResult.status === 'success') {
+          customAlert('✓ Exception saved successfully');
+        } else {
+          customAlert('⚠ Exception saved offline');
+        }
+        
+        go('screen-stop');
+      } catch (error) {
+        console.error('Failed to save exception:', error);
+        customAlert('✗ Failed to save exception');
+      }
+    }
+
+    // Google Sheets API functions - UPDATED
+    async function fetchFromSheet(sheetName) {
+      try {
+        const url = `${CONFIG.API_BASE_URL}?action=get&sheet=${sheetName}&courier=${CONFIG.COURIER_ID}&_=${Date.now()}`;
+        
+        console.log(`Fetching from: ${url}`);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          cache: 'no-cache'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log(`API Response for ${sheetName}:`, data);
+        
+        return data;
+      } catch (error) {
+        console.error(`Failed to fetch from ${sheetName}:`, error);
+        CONFIG.OFFLINE_MODE = true;
+        return { 
+          status: 'error', 
+          message: error.message,
+          data: [] 
+        };
+      }
+    }
+
+    async function saveScanToSheet(scanData) {
+      return await saveToSheet('scans', scanData);
+    }
+
+    async function saveSignatureToSheet(signatureData) {
+      return await saveToSheet('signatures', signatureData);
+    }
+
+    async function savePhotoToSheet(photoData) {
+      return await saveToSheet('photos', photoData);
+    }
+
+    async function saveExceptionToSheet(exceptionData) {
+      return await saveToSheet('exceptions', exceptionData);
+    }
+
+    async function updateDeliveryStatus(stopId, statusData) {
+      return await saveToSheet('delivery_updates', {
+        stop_id: stopId,
+        ...statusData,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    async function saveToSheet(sheetName, data) {
+      try {
+        console.log(`Saving to ${sheetName}:`, data);
+        
+        const response = await fetch(CONFIG.API_BASE_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'save',
+            sheet: sheetName,
+            data: data
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log(`Save result for ${sheetName}:`, result);
+        
+        return result;
+      } catch (error) {
+        console.error(`Failed to save to ${sheetName}:`, error);
+        
+        // Store offline
+        storeOffline(sheetName, data);
+        
+        return { 
+          status: 'error', 
+          message: error.message,
+          offline: true 
+        };
+      }
+    }
+
+    // Offline storage
+    function storeOffline(sheetName, data) {
+      try {
+        const offlineData = JSON.parse(localStorage.getItem('offline_data') || '{}');
+        if (!offlineData[sheetName]) {
+          offlineData[sheetName] = [];
+        }
+        offlineData[sheetName].push({
+          ...data,
+          _offline: true,
+          _timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('offline_data', JSON.stringify(offlineData));
+        console.log(`Stored offline to ${sheetName}:`, data);
+      } catch (error) {
+        console.error('Failed to store offline:', error);
+      }
+    }
+
+    // Sync status
+    function updateSyncStatus(status) {
+      const syncDot = document.getElementById('sync-dot');
+      const syncStatus = document.getElementById('sync-status');
+      
+      if (status) {
+        currentState.syncStatus = status;
+      }
+      
+      syncDot.className = 'sync-dot';
+      switch (currentState.syncStatus) {
+        case 'online':
+          syncDot.classList.add('online');
+          syncStatus.textContent = 'Synced';
+          break;
+        case 'offline':
+          syncDot.classList.add('offline');
+          syncStatus.textContent = 'Offline';
+          break;
+        case 'syncing':
+          syncDot.classList.add('syncing');
+          syncStatus.textContent = 'Syncing...';
+          break;
+      }
+    }
+
+    async function checkSyncStatus() {
+      try {
+        updateSyncStatus('syncing');
+        
+        // Test API connection
+        const testUrl = `${CONFIG.API_BASE_URL}?action=test&_=${Date.now()}`;
+        const response = await fetch(testUrl);
+        
+        if (response.ok) {
+          CONFIG.OFFLINE_MODE = false;
+          
+          // Try to sync offline data
+          await syncOfflineData();
+          
+          updateSyncStatus('online');
+        } else {
+          throw new Error('API not responding');
+        }
+      } catch (error) {
+        console.error('Sync check failed:', error);
+        CONFIG.OFFLINE_MODE = true;
+        updateSyncStatus('offline');
+      }
+    }
+
+    async function syncOfflineData() {
+      try {
+        const offlineData = JSON.parse(localStorage.getItem('offline_data') || '{}');
+        let syncedCount = 0;
+        
+        for (const [sheetName, records] of Object.entries(offlineData)) {
+          for (let i = records.length - 1; i >= 0; i--) {
+            const record = records[i];
+            if (record._offline) {
+              try {
+                // Remove offline flag before sending
+                const { _offline, _timestamp, ...cleanRecord } = record;
+                
+                const result = await saveToSheet(sheetName, cleanRecord);
+                
+                if (result.status === 'success') {
+                  // Remove from offline storage
+                  records.splice(i, 1);
+                  syncedCount++;
+                }
+              } catch (error) {
+                console.error(`Failed to sync ${sheetName} record:`, error);
+              }
+            }
+          }
+          
+          // Update the sheet data
+          if (records.length === 0) {
+            delete offlineData[sheetName];
+          }
+        }
+        
+        localStorage.setItem('offline_data', JSON.stringify(offlineData));
+        
+        if (syncedCount > 0) {
+          console.log(`Synced ${syncedCount} offline records`);
+        }
+      } catch (error) {
+        console.error('Failed to sync offline data:', error);
+      }
+    }
+
+    // Helper functions
+    function showLoading(elementId) {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.innerHTML = '<div class="loading-spinner"></div>';
+      }
+    }
+
+    function showError(elementId, message) {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.innerHTML = `<div class="list-item" style="color: #FF3333;">${message}</div>`;
+      }
+    }
+
+    // Custom alert function
+    function customAlert(message) {
+      // Remove existing alerts
+      const existingAlert = document.querySelector('.alert');
+      if (existingAlert) {
+        existingAlert.remove();
+      }
+      
+      const alertDiv = document.createElement('div');
+      alertDiv.className = 'alert';
+      alertDiv.innerHTML = `
+        <div>${message}</div>
+        <button class="btn btn-primary" onclick="this.parentElement.remove()">OK</button>
+      `;
+      document.body.appendChild(alertDiv);
+      
+      // Auto-remove after 3 seconds
+      setTimeout(() => {
+        if (alertDiv.parentElement) {
+          alertDiv.remove();
+        }
+      }, 3000);
+    }
+
+    // Mock data for demo
+    function getMockData(sheetName) {
+      const mockData = {
+        deliveries: [
+          {
+            id: 'DEL001',
+            stop_number: 12,
+            customer_name: 'John Smith',
+            address: '123 Oak St',
+            city: 'Silverton, OR 97381',
+            package_count: 3,
+            status: 'pending',
+            courier_id: CONFIG.COURIER_ID
+          },
+          {
+            id: 'DEL002',
+            stop_number: 13,
+            customer_name: 'ACME Corp',
+            address: '45 Industrial Rd',
+            city: 'Salem, OR 97301',
+            package_count: 2,
+            status: 'pending',
+            courier_id: CONFIG.COURIER_ID
+          },
+          {
+            id: 'DEL003',
+            stop_number: 14,
+            customer_name: 'Maria Lopez',
+            address: '9 Pine Ave',
+            city: 'Silverton, OR 97381',
+            package_count: 1,
+            status: 'pending',
+            courier_id: CONFIG.COURIER_ID
+          }
+        ],
+        pickups: [
+          {
+            id: 'PICK001',
+            customer_name: 'ACME Corp',
+            address: '45 Industrial Rd',
+            city: 'Salem, OR 97301',
+            package_count: 5,
+            scheduled_time: '15:00',
+            status: 'scheduled',
+            courier_id: CONFIG.COURIER_ID
+          }
+        ],
+        messages: [
+          {
+            id: 'MSG001',
+            sender: 'Dispatch',
+            message: 'New pickup added at ACME Corp.',
+            timestamp: new Date().toISOString(),
+            read: false,
+            courier_id: CONFIG.COURIER_ID,
+            priority: 'normal'
+          }
+        ]
+      };
+      
+      return {
+        status: 'success',
+        data: mockData[sheetName] || [],
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Patch scan navigation
+    (function patchScanNavigation() {
+      const scanButtons = document.querySelectorAll("[onclick*='screen-scan']");
+      scanButtons.forEach(btn => {
+        const oldClick = btn.onclick;
+        btn.onclick = function () {
+          const active = document.querySelector('.screen.active');
+          if (active && active.id) {
+            lastScreenBeforeScan = active.id;
+          }
+          if (oldClick) oldClick.call(this);
+        };
+      });
+    })();
+
+    // Test API connection
+    async function testAPI() {
+      try {
+        const testUrl = `${CONFIG.API_BASE_URL}?action=test&_=${Date.now()}`;
+        const response = await fetch(testUrl);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('API Test successful:', data);
+          return true;
+        } else {
+          throw new Error('API test failed');
+        }
+      } catch (error) {
+        console.warn('API Test failed, using offline mode:', error);
+        CONFIG.OFFLINE_MODE = true;
+        updateSyncStatus('offline');
+        return false;
+      }
+    }
+  </script>
+</body>
+</html>
