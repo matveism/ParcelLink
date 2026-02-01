@@ -763,7 +763,7 @@ const CONFIG = {
 };
 
 // ==============================================
-// CORE API FUNCTIONS - STRICT PRODUCTION
+// CORE API FUNCTIONS
 // ==============================================
 async function apiCall(action, data = {}) {
   const params = new URLSearchParams();
@@ -785,12 +785,8 @@ async function apiCall(action, data = {}) {
     }
     
     const result = await response.json();
-    
-    if (!result.success) {
-      throw new Error(result.message || 'API call failed');
-    }
-    
     return result;
+    
   } catch (error) {
     console.error('API Error:', error);
     
@@ -834,9 +830,7 @@ async function processSyncQueue() {
       CONFIG.SYNC_QUEUE.shift();
       saveToLocalStorage('sync_queue', CONFIG.SYNC_QUEUE);
       updateSyncStatus();
-      showToast('Sync completed', 'success');
       
-      // Process next item
       if (CONFIG.SYNC_QUEUE.length > 0) {
         setTimeout(processSyncQueue, 1000);
       }
@@ -844,7 +838,6 @@ async function processSyncQueue() {
       item.attempts++;
       if (item.attempts >= 3) {
         CONFIG.SYNC_QUEUE.shift();
-        showToast('Sync failed after 3 attempts', 'error');
       }
       saveToLocalStorage('sync_queue', CONFIG.SYNC_QUEUE);
     }
@@ -854,7 +847,7 @@ async function processSyncQueue() {
 }
 
 // ==============================================
-// AUTHENTICATION
+// AUTHENTICATION - FIXED
 // ==============================================
 async function performLogin() {
   const courierId = document.getElementById('courier-id-input').value.trim();
@@ -864,66 +857,87 @@ async function performLogin() {
   }
   
   const loginBtn = document.getElementById('login-btn');
-  loginBtn.disabled = true;
-  loginBtn.textContent = 'AUTHENTICATING...';
+  const statusElement = document.getElementById('login-status');
   
-  showStatus('Connecting to server...', 'loading');
+  // SAFETY CHECK: Make sure elements exist
+  if (!loginBtn) {
+    console.error('Login button not found');
+    return;
+  }
+  
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'LOGGING IN...';
+  
+  if (statusElement) {
+    statusElement.textContent = 'Connecting to server...';
+    statusElement.className = 'status-text loading';
+  }
   
   try {
     const result = await apiCall('login', { courierId: courierId });
     
-    if (result.queued) {
-      showStatus('Offline mode - using last known data', 'warning');
-      // Try to load from localStorage
-      const savedData = loadFromLocalStorage(`courier_${courierId}`);
-      if (savedData) {
-        result.courierId = savedData.courierId;
-        result.name = savedData.name;
-      }
-    }
-    
-    if (result.success) {
-      CONFIG.COURIER_ID = courierId;
-      
-      // Save to localStorage for offline reference
-      saveToLocalStorage('current_courier', {
-        id: courierId,
-        name: result.name || `Courier ${courierId}`,
-        loginTime: new Date().toISOString()
-      });
-      
-      // Update UI
-      document.getElementById('home-courier').textContent = `ID: ${courierId}`;
-      if (result.name) {
-        document.getElementById('home-title').textContent = `Welcome ${result.name}`;
-      }
-      
-      showStatus('Login successful', 'success');
-      
-      // Load today's route
-      await loadTodayRoute();
-      
-      // Switch to home screen
-      setTimeout(() => {
-        go('screen-home');
-        updateClock();
-        startClockUpdate();
-      }, 1000);
-      
-    } else {
+    if (!result.success) {
       throw new Error(result.message || 'Login failed');
     }
     
+    // Login successful
+    CONFIG.COURIER_ID = courierId;
+    
+    // Save to localStorage
+    saveToLocalStorage('current_courier', {
+      id: courierId,
+      name: result.name || `Courier ${courierId}`,
+      loginTime: new Date().toISOString()
+    });
+    
+    if (statusElement) {
+      statusElement.textContent = 'Login successful';
+      statusElement.className = 'status-text success';
+    }
+    
+    // Delay before switching screens
+    setTimeout(() => {
+      go('screen-home');
+      updateClock();
+      startClockUpdate();
+      
+      // Update UI elements safely
+      setTimeout(() => {
+        const homeCourierElement = document.getElementById('home-courier');
+        const homeTitleElement = document.getElementById('home-title');
+        
+        if (homeCourierElement) {
+          homeCourierElement.textContent = `ID: ${courierId}`;
+        }
+        
+        if (homeTitleElement && result.name) {
+          homeTitleElement.textContent = `Welcome ${result.name}`;
+        }
+        
+        // Load routes after UI is ready
+        loadTodayRoute();
+      }, 100);
+      
+    }, 1000);
+    
   } catch (error) {
-    showStatus(`Login failed: ${error.message}`, 'error');
+    console.error('Login error:', error);
+    
+    if (statusElement) {
+      statusElement.textContent = `Login failed: ${error.message}`;
+      statusElement.className = 'status-text error';
+    }
+    
   } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'LOGIN';
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'LOGIN';
+    }
   }
 }
 
 // ==============================================
-// ROUTE & STOP MANAGEMENT
+// ROUTE & STOP MANAGEMENT - FIXED
 // ==============================================
 async function loadTodayRoute() {
   if (!CONFIG.COURIER_ID) return;
@@ -939,28 +953,38 @@ async function loadTodayRoute() {
     if (result.success && result.routes && result.routes.length > 0) {
       CONFIG.CURRENT_ROUTE = result.routes[0].routeId;
       
-      // Update UI
-      const route = result.routes[0];
-      document.getElementById('route-info').textContent = 
-        `${route.completedStops || 0}/${route.totalStops || 0}`;
-      document.getElementById('deliveries-route').textContent = 
-        `Route: ${route.completedStops || 0}/${route.totalStops || 0}`;
+      // Update UI safely
+      setTimeout(() => {
+        const routeInfoElement = document.getElementById('route-info');
+        const deliveriesRouteElement = document.getElementById('deliveries-route');
+        
+        if (routeInfoElement) {
+          const route = result.routes[0];
+          routeInfoElement.textContent = `${route.completedStops || 0}/${route.totalStops || 0}`;
+        }
+        
+        if (deliveriesRouteElement) {
+          const route = result.routes[0];
+          deliveriesRouteElement.textContent = `Route: ${route.completedStops || 0}/${route.totalStops || 0}`;
+        }
+      }, 100);
       
       // Save route info
-      saveToLocalStorage('current_route', route);
+      saveToLocalStorage('current_route', result.routes[0]);
       
     } else if (result.queued) {
-      // Try to load from localStorage
+      // Load from localStorage
       const savedRoute = loadFromLocalStorage('current_route');
       if (savedRoute) {
         CONFIG.CURRENT_ROUTE = savedRoute.routeId;
-        document.getElementById('route-info').textContent = 
-          `${savedRoute.completedStops || 0}/${savedRoute.totalStops || 0}`;
-      } else {
-        showToast('No route assigned for today', 'warning');
+        
+        setTimeout(() => {
+          const routeInfoElement = document.getElementById('route-info');
+          if (routeInfoElement) {
+            routeInfoElement.textContent = `${savedRoute.completedStops || 0}/${savedRoute.totalStops || 0}`;
+          }
+        }, 100);
       }
-    } else {
-      showToast('No route assigned for today', 'warning');
     }
     
   } catch (error) {
@@ -984,44 +1008,38 @@ async function loadDeliveries() {
     if (result.success && result.stops) {
       const deliveries = result.stops.filter(stop => stop.type === 'DELIVERY');
       displayDeliveriesList(deliveries);
-      
-      // Save to localStorage for offline
       saveToLocalStorage('current_deliveries', deliveries);
-      
     } else if (result.queued) {
-      // Load from localStorage
       const savedDeliveries = loadFromLocalStorage('current_deliveries') || [];
       displayDeliveriesList(savedDeliveries);
-      
     } else {
-      document.getElementById('deliveries-list').innerHTML = `
-        <div class="list-item">
-          <div class="list-item-title">No deliveries found</div>
-        </div>`;
+      const listElement = document.getElementById('deliveries-list');
+      if (listElement) {
+        listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No deliveries found</div></div>';
+      }
     }
     
   } catch (error) {
     console.error('Load deliveries error:', error);
-    showToast('Failed to load deliveries', 'error');
   }
 }
 
 function displayDeliveriesList(deliveries) {
   const listElement = document.getElementById('deliveries-list');
+  const countElement = document.getElementById('deliveries-count');
+  
+  if (!listElement) return;
   
   if (!deliveries || deliveries.length === 0) {
-    listElement.innerHTML = `
-      <div class="list-item">
-        <div class="list-item-title">No deliveries scheduled</div>
-      </div>`;
-    document.getElementById('deliveries-count').textContent = '0';
+    listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No deliveries scheduled</div></div>';
+    if (countElement) countElement.textContent = '0';
     return;
   }
   
   const listHtml = deliveries.map(stop => `
     <div class="list-item" onclick="loadStopDetail('${stop.stopId}')">
-      <div class="list-item-title">${stop.name}</div>
-      <div class="list-item-sub">${stop.address}, ${stop.city}</div>
+      <div class="list-item-title">${stop.name || 'Unknown'}</div>
+      <div class="list-item-sub">${stop.address || ''}, ${stop.city || ''}</div>
       <div class="list-item-sub">
         Parcels: ${stop.parcelCount || 1} | Status: <span class="${getStatusColor(stop.status)}">${stop.status || 'PENDING'}</span>
       </div>
@@ -1029,19 +1047,17 @@ function displayDeliveriesList(deliveries) {
   `).join('');
   
   listElement.innerHTML = listHtml;
-  document.getElementById('deliveries-count').textContent = deliveries.length;
+  if (countElement) countElement.textContent = deliveries.length;
 }
 
 async function loadStopDetail(stopId) {
   CONFIG.CURRENT_STOP = stopId;
   
   try {
-    // First try to get from current deliveries
     const deliveries = loadFromLocalStorage('current_deliveries') || [];
     let stop = deliveries.find(s => s.stopId === stopId);
     
     if (!stop) {
-      // Try API call
       const result = await apiCall('getStop', { stopId: stopId });
       if (result.success && result.stop) {
         stop = result.stop;
@@ -1062,27 +1078,37 @@ async function loadStopDetail(stopId) {
 }
 
 function updateStopDetailScreen(stop) {
-  document.getElementById('stop-name').textContent = stop.name;
-  document.getElementById('stop-number').textContent = `Stop ${stop.stopNumber || ''}`;
-  document.getElementById('stop-status').textContent = stop.status || 'PENDING';
-  document.getElementById('stop-status').className = getStatusColor(stop.status);
+  // Update elements safely
+  const stopNameElement = document.getElementById('stop-name');
+  const stopNumberElement = document.getElementById('stop-number');
+  const stopStatusElement = document.getElementById('stop-status');
+  const stopDetailsElement = document.getElementById('stop-details');
+  const stopParcelsElement = document.getElementById('stop-parcels');
+  const currentStopScanElement = document.getElementById('current-stop-scan');
   
-  const detailsHtml = `
-    <div><b>Address:</b> ${stop.address || ''}</div>
-    <div>${stop.city || ''}, ${stop.zip || ''}</div>
-    ${stop.phone ? `<div><b>Phone:</b> ${stop.phone}</div>` : ''}
-    <div><b>Parcels:</b> ${stop.parcelCount || 1}</div>
-    ${stop.notes ? `<div><b>Notes:</b> ${stop.notes}</div>` : ''}
-  `;
+  if (stopNameElement) stopNameElement.textContent = stop.name || '--';
+  if (stopNumberElement) stopNumberElement.textContent = `Stop ${stop.stopNumber || ''}`;
+  if (stopStatusElement) {
+    stopStatusElement.textContent = stop.status || 'PENDING';
+    stopStatusElement.className = getStatusColor(stop.status);
+  }
+  if (stopParcelsElement) stopParcelsElement.textContent = stop.parcelCount || '--';
+  if (currentStopScanElement) currentStopScanElement.textContent = stop.name || '--';
   
-  document.getElementById('stop-details').innerHTML = detailsHtml;
-  
-  // Update scan screen reference
-  document.getElementById('current-stop-scan').textContent = stop.name;
+  if (stopDetailsElement) {
+    const detailsHtml = `
+      <div><b>Address:</b> ${stop.address || ''}</div>
+      <div>${stop.city || ''}, ${stop.zip || ''}</div>
+      ${stop.phone ? `<div><b>Phone:</b> ${stop.phone}</div>` : ''}
+      <div><b>Parcels:</b> ${stop.parcelCount || 1}</div>
+      ${stop.notes ? `<div><b>Notes:</b> ${stop.notes}</div>` : ''}
+    `;
+    stopDetailsElement.innerHTML = detailsHtml;
+  }
 }
 
 // ==============================================
-// SCAN FUNCTIONS - PRODUCTION ONLY
+// SCAN FUNCTIONS
 // ==============================================
 function goToScan() {
   if (!CONFIG.CURRENT_STOP) {
@@ -1091,17 +1117,24 @@ function goToScan() {
     return;
   }
   
-  CONFIG.LAST_SCREEN = document.querySelector('.screen.active').id;
+  const currentScreen = document.querySelector('.screen.active');
+  if (currentScreen && currentScreen.id) {
+    CONFIG.LAST_SCREEN = currentScreen.id;
+  }
+  
   updateScanScreen();
   go('screen-scan');
 }
 
 function updateScanScreen() {
-  // Update today's scan count
   const today = new Date().toISOString().split('T')[0];
   const scans = loadFromLocalStorage('scans') || [];
   const todayScans = scans.filter(s => s.scanTime && s.scanTime.startsWith(today));
-  document.getElementById('today-scans').textContent = todayScans.length;
+  
+  const todayScansElement = document.getElementById('today-scans');
+  if (todayScansElement) {
+    todayScansElement.textContent = todayScans.length;
+  }
 }
 
 async function manualBarcodeEntry() {
@@ -1134,22 +1167,14 @@ async function saveScan(barcode, scanType = 'SCAN') {
     const result = await apiCall('saveScan', scanData);
     
     if (result.success) {
-      // Save locally for history
       const scans = loadFromLocalStorage('scans') || [];
       scans.push(scanData);
       saveToLocalStorage('scans', scans);
       
-      // Update UI
       updateScanScreen();
       showToast(`Scan saved: ${barcode}`, 'success');
       
-      // Update stop status if needed
-      if (scanType === 'SCAN') {
-        await updateStopStatus(CONFIG.CURRENT_STOP, 'SCANNED');
-      }
-      
     } else if (result.queued) {
-      // Queue for sync
       scanData.queued = true;
       const scans = loadFromLocalStorage('scans') || [];
       scans.push(scanData);
@@ -1161,7 +1186,6 @@ async function saveScan(barcode, scanType = 'SCAN') {
     
   } catch (error) {
     console.error('Save scan error:', error);
-    showToast('Failed to save scan', 'error');
   }
 }
 
@@ -1177,7 +1201,6 @@ async function clearLastScan() {
     scans.pop();
     saveToLocalStorage('scans', scans);
     updateScanScreen();
-    showToast('Last scan removed', 'success');
   }
 }
 
@@ -1186,18 +1209,17 @@ async function viewScanHistory() {
   
   try {
     const scans = loadFromLocalStorage('scans') || [];
+    const stops = loadFromLocalStorage('current_deliveries') || [];
+    const listElement = document.getElementById('scan-history-list');
+    const countElement = document.getElementById('history-count');
+    
+    if (!listElement) return;
     
     if (scans.length === 0) {
-      document.getElementById('scan-history-list').innerHTML = `
-        <div class="list-item">
-          <div class="list-item-title">No scan history</div>
-        </div>`;
-      document.getElementById('history-count').textContent = '0';
+      listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No scan history</div></div>';
+      if (countElement) countElement.textContent = '0';
       return;
     }
-    
-    // Get stops for reference
-    const stops = loadFromLocalStorage('current_deliveries') || [];
     
     const historyHtml = scans.slice().reverse().map(scan => {
       const stop = stops.find(s => s.stopId === scan.stopId);
@@ -1212,8 +1234,8 @@ async function viewScanHistory() {
       `;
     }).join('');
     
-    document.getElementById('scan-history-list').innerHTML = historyHtml;
-    document.getElementById('history-count').textContent = scans.length;
+    listElement.innerHTML = historyHtml;
+    if (countElement) countElement.textContent = scans.length;
     
   } catch (error) {
     console.error('Load scan history error:', error);
@@ -1235,7 +1257,6 @@ async function markAsDelivered() {
       });
       
       if (result.success) {
-        // Update local data
         const deliveries = loadFromLocalStorage('current_deliveries') || [];
         const stopIndex = deliveries.findIndex(s => s.stopId === CONFIG.CURRENT_STOP);
         if (stopIndex !== -1) {
@@ -1245,18 +1266,11 @@ async function markAsDelivered() {
         
         showToast('Stop marked as delivered', 'success');
         go('screen-deliveries');
-        
-        // Update route progress
         await loadTodayRoute();
-        
-      } else if (result.queued) {
-        showToast('Delivery status queued for sync', 'warning');
-        go('screen-deliveries');
       }
       
     } catch (error) {
       console.error('Mark delivered error:', error);
-      showToast('Failed to update status', 'error');
     }
   }
 }
@@ -1275,23 +1289,33 @@ async function loadExceptions() {
     { id: 'OTHER', name: 'Other Issue' }
   ];
   
-  const listHtml = exceptions.map(ex => `
-    <div class="list-item" onclick="openExceptionDetail('${ex.id}', '${ex.name}')">
-      <div class="list-item-title">${ex.name}</div>
-    </div>
-  `).join('');
-  
-  document.getElementById('exceptions-list').innerHTML = listHtml;
+  const listElement = document.getElementById('exceptions-list');
+  if (listElement) {
+    const listHtml = exceptions.map(ex => `
+      <div class="list-item" onclick="openExceptionDetail('${ex.id}', '${ex.name}')">
+        <div class="list-item-title">${ex.name}</div>
+      </div>
+    `).join('');
+    
+    listElement.innerHTML = listHtml;
+  }
 }
 
 function openExceptionDetail(exceptionId, exceptionName) {
   CONFIG.CURRENT_EXCEPTION = exceptionId;
-  document.getElementById('exception-title').textContent = exceptionName;
   
-  // Clear form
-  document.getElementById('exception-notes').value = '';
-  document.getElementById('exception-action').value = '';
-  document.getElementById('exception-contact').value = 'NONE';
+  const titleElement = document.getElementById('exception-title');
+  if (titleElement) {
+    titleElement.textContent = exceptionName;
+  }
+  
+  const notesElement = document.getElementById('exception-notes');
+  const actionElement = document.getElementById('exception-action');
+  const contactElement = document.getElementById('exception-contact');
+  
+  if (notesElement) notesElement.value = '';
+  if (actionElement) actionElement.value = '';
+  if (contactElement) contactElement.value = 'NONE';
   
   go('screen-exception-detail');
 }
@@ -1302,14 +1326,23 @@ async function saveException() {
     return;
   }
   
-  const notes = document.getElementById('exception-notes').value.trim();
+  const notesElement = document.getElementById('exception-notes');
+  const actionElement = document.getElementById('exception-action');
+  const contactElement = document.getElementById('exception-contact');
+  
+  if (!notesElement || !actionElement || !contactElement) {
+    showToast('Form elements not found', 'error');
+    return;
+  }
+  
+  const notes = notesElement.value.trim();
   if (!notes) {
     showToast('Please enter exception notes', 'error');
     return;
   }
   
-  const action = document.getElementById('exception-action').value;
-  const contact = document.getElementById('exception-contact').value;
+  const action = actionElement.value;
+  const contact = contactElement.value;
   
   const exceptionData = {
     stopId: CONFIG.CURRENT_STOP,
@@ -1325,7 +1358,6 @@ async function saveException() {
     const result = await apiCall('saveException', exceptionData);
     
     if (result.success) {
-      // Update local stop status
       const deliveries = loadFromLocalStorage('current_deliveries') || [];
       const stopIndex = deliveries.findIndex(s => s.stopId === CONFIG.CURRENT_STOP);
       if (stopIndex !== -1) {
@@ -1333,22 +1365,16 @@ async function saveException() {
         saveToLocalStorage('current_deliveries', deliveries);
       }
       
-      // Save exception locally
       const exceptions = loadFromLocalStorage('exceptions') || [];
       exceptions.push(exceptionData);
       saveToLocalStorage('exceptions', exceptions);
       
       showToast('Exception saved', 'success');
       go('screen-stop');
-      
-    } else if (result.queued) {
-      showToast('Exception queued for sync', 'warning');
-      go('screen-stop');
     }
     
   } catch (error) {
     console.error('Save exception error:', error);
-    showToast('Failed to save exception', 'error');
   }
 }
 
@@ -1371,18 +1397,7 @@ async function loadPickups() {
     if (result.success && result.stops) {
       const pickups = result.stops.filter(stop => stop.type === 'PICKUP');
       displayPickupsList(pickups);
-      
-      // Save to localStorage
       saveToLocalStorage('current_pickups', pickups);
-      
-    } else if (result.queued) {
-      const savedPickups = loadFromLocalStorage('current_pickups') || [];
-      displayPickupsList(savedPickups);
-    } else {
-      document.getElementById('pickups-list').innerHTML = `
-        <div class="list-item">
-          <div class="list-item-title">No pickups scheduled</div>
-        </div>`;
     }
     
   } catch (error) {
@@ -1392,13 +1407,13 @@ async function loadPickups() {
 
 function displayPickupsList(pickups) {
   const listElement = document.getElementById('pickups-list');
+  const countElement = document.getElementById('pickups-count');
+  
+  if (!listElement) return;
   
   if (!pickups || pickups.length === 0) {
-    listElement.innerHTML = `
-      <div class="list-item">
-        <div class="list-item-title">No pickups scheduled</div>
-      </div>`;
-    document.getElementById('pickups-count').textContent = '0';
+    listElement.innerHTML = '<div class="list-item"><div class="list-item-title">No pickups scheduled</div></div>';
+    if (countElement) countElement.textContent = '0';
     return;
   }
   
@@ -1411,74 +1426,15 @@ function displayPickupsList(pickups) {
   `).join('');
   
   listElement.innerHTML = listHtml;
-  document.getElementById('pickups-count').textContent = pickups.length;
+  if (countElement) countElement.textContent = pickups.length;
 }
 
 // ==============================================
-// HISTORY & UTILITY FUNCTIONS
-// ==============================================
-async function showStopHistory() {
-  if (!CONFIG.CURRENT_STOP) return;
-  
-  go('screen-stop-history');
-  
-  try {
-    // Combine scans and exceptions for this stop
-    const scans = loadFromLocalStorage('scans') || [];
-    const exceptions = loadFromLocalStorage('exceptions') || [];
-    
-    const stopScans = scans.filter(s => s.stopId === CONFIG.CURRENT_STOP);
-    const stopExceptions = exceptions.filter(e => e.stopId === CONFIG.CURRENT_STOP);
-    
-    const allEvents = [
-      ...stopScans.map(s => ({ ...s, type: 'SCAN' })),
-      ...stopExceptions.map(e => ({ ...e, type: 'EXCEPTION' }))
-    ].sort((a, b) => new Date(b.timestamp || b.scanTime || b.exceptionTime) - new Date(a.timestamp || a.scanTime || a.exceptionTime));
-    
-    if (allEvents.length === 0) {
-      document.getElementById('stop-history-list').innerHTML = `
-        <div class="list-item">
-          <div class="list-item-title">No history for this stop</div>
-        </div>`;
-      document.getElementById('stop-history-count').textContent = '0';
-      return;
-    }
-    
-    const historyHtml = allEvents.map(event => {
-      const time = event.scanTime || event.exceptionTime;
-      const timeStr = time ? new Date(time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
-      
-      if (event.type === 'SCAN') {
-        return `
-          <div class="list-item">
-            <div class="list-item-title">📦 Scan: ${event.barcode}</div>
-            <div class="list-item-sub">${timeStr} | ${event.scanType || 'SCAN'}</div>
-          </div>
-        `;
-      } else {
-        return `
-          <div class="list-item">
-            <div class="list-item-title">⚠️ Exception: ${event.exceptionType}</div>
-            <div class="list-item-sub">${timeStr}</div>
-            <div class="list-item-sub">${event.notes || ''}</div>
-          </div>
-        `;
-      }
-    }).join('');
-    
-    document.getElementById('stop-history-list').innerHTML = historyHtml;
-    document.getElementById('stop-history-count').textContent = allEvents.length;
-    
-  } catch (error) {
-    console.error('Load stop history error:', error);
-  }
-}
-
-// ==============================================
-// UI UTILITY FUNCTIONS
+// UI UTILITY FUNCTIONS - FIXED
 // ==============================================
 function go(screenId) {
-  document.querySelectorAll('.screen').forEach(screen => {
+  const screens = document.querySelectorAll('.screen');
+  screens.forEach(screen => {
     screen.classList.remove('active');
   });
   
@@ -1486,7 +1442,6 @@ function go(screenId) {
   if (screen) {
     screen.classList.add('active');
     
-    // Initialize specific screens
     if (screenId === 'screen-exceptions') {
       loadExceptions();
     } else if (screenId === 'screen-scan-history') {
@@ -1504,8 +1459,9 @@ function updateClock() {
   const timeStr = now.toTimeString().substr(0, 5);
   const onlineStatus = navigator.onLine ? 'ON' : 'OFF';
   
-  document.querySelectorAll('[id$="-time"]').forEach(el => {
-    el.textContent = `${timeStr} | ${onlineStatus} | --%`;
+  const timeElements = document.querySelectorAll('[id$="-time"]');
+  timeElements.forEach(el => {
+    if (el) el.textContent = `${timeStr} | ${onlineStatus} | --%`;
   });
 }
 
@@ -1517,6 +1473,8 @@ function startClockUpdate() {
 function updateNetworkStatus() {
   const statusElement = document.getElementById('network-status');
   const syncDot = document.getElementById('sync-dot');
+  
+  if (!statusElement || !syncDot) return;
   
   if (navigator.onLine) {
     statusElement.textContent = 'Online';
@@ -1535,26 +1493,51 @@ function updateSyncStatus() {
   
   if (CONFIG.SYNC_QUEUE.length > 0) {
     syncDot.style.background = '#FF9900';
-    syncDot.title = `${CONFIG.SYNC_QUEUE.length} pending sync`;
   } else if (!navigator.onLine) {
     syncDot.style.background = '#CC0000';
-    syncDot.title = 'Offline';
   } else {
     syncDot.style.background = '#00CC33';
-    syncDot.title = 'Synced';
   }
 }
 
 function showStatus(message, type) {
   const statusElement = document.getElementById('login-status');
-  statusElement.textContent = message;
-  statusElement.className = `status-text ${type}`;
+  if (statusElement) {
+    statusElement.textContent = message;
+    statusElement.className = `status-text ${type}`;
+  }
 }
 
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
   toast.className = `toast toast-${type}`;
+  toast.style.cssText = `
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s;
+  `;
+  
+  if (type === 'success') {
+    toast.style.background = '#00CC33';
+    toast.style.color = 'white';
+  } else if (type === 'error') {
+    toast.style.background = '#CC0000';
+    toast.style.color = 'white';
+  } else if (type === 'warning') {
+    toast.style.background = '#FF9900';
+    toast.style.color = 'white';
+  } else {
+    toast.style.background = '#F7C600';
+    toast.style.color = 'black';
+  }
   
   document.body.appendChild(toast);
   
@@ -1589,7 +1572,9 @@ function loadFromLocalStorage(key) {
 }
 
 function getStatusColor(status) {
-  switch(status?.toUpperCase()) {
+  if (!status) return '';
+  
+  switch(status.toUpperCase()) {
     case 'DELIVERED': return 'success';
     case 'SCANNED': return 'success';
     case 'EXCEPTION': return 'error';
@@ -1598,30 +1583,8 @@ function getStatusColor(status) {
   }
 }
 
-async function updateStopStatus(stopId, status) {
-  try {
-    const result = await apiCall('updateStop', {
-      stopId: stopId,
-      status: status
-    });
-    
-    if (result.success) {
-      // Update local data
-      const deliveries = loadFromLocalStorage('current_deliveries') || [];
-      const stopIndex = deliveries.findIndex(s => s.stopId === stopId);
-      if (stopIndex !== -1) {
-        deliveries[stopIndex].status = status;
-        saveToLocalStorage('current_deliveries', deliveries);
-      }
-    }
-    
-  } catch (error) {
-    console.error('Update stop status error:', error);
-  }
-}
-
 // ==============================================
-// INITIALIZATION
+// INITIALIZATION - FIXED
 // ==============================================
 document.addEventListener('DOMContentLoaded', function() {
   // Load queued items
@@ -1643,13 +1606,17 @@ document.addEventListener('DOMContentLoaded', function() {
   setInterval(processSyncQueue, 30000);
   
   // Focus login input
-  document.getElementById('courier-id-input').focus();
+  const loginInput = document.getElementById('courier-id-input');
+  if (loginInput) {
+    loginInput.focus();
+  }
   
   // Check for saved courier ID
   const savedCourier = loadFromLocalStorage('current_courier');
   if (savedCourier && savedCourier.id) {
-    document.getElementById('courier-id-input').value = savedCourier.id;
-    // Auto-login can be enabled here if desired
+    if (loginInput) {
+      loginInput.value = savedCourier.id;
+    }
   }
 });
 
